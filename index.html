@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Kirana Street</title>
+<title>Pettikkada</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Hind:wght@400;500;600&display=swap">
 <style>
@@ -82,6 +82,15 @@ input.txt{font:inherit;border:0;border-bottom:2px solid var(--ink);background:tr
 #joy i{position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:rgba(255,230,180,.6)}
 @media (pointer:coarse){#joy{display:block}#hint{display:none}}
 @media (max-width:640px){#acts{bottom:calc(14px + env(safe-area-inset-bottom,0px))}#bill{bottom:calc(150px + env(safe-area-inset-bottom,0px))}.slip{padding-left:40px}.slip::before{left:28px}}
+#nav{position:fixed;left:max(10px,env(safe-area-inset-left,0px));top:calc(56px + env(safe-area-inset-top,0px));z-index:4;pointer-events:none}
+#nav b{font-size:16px}
+#modalBody.phone{background:#0f1626;background-image:none;color:#e8eefc;border:7px solid #232b3d;border-radius:30px;padding:14px 18px;max-width:380px}
+#modalBody.phone::before{display:none}
+.phone .btn.ghost{border-color:#7f93c0;color:#e8eefc}
+.phone .btn{color:#14110d}.phone .btn.ghost{color:#e8eefc}
+.apps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0}
+.app{border:0;border-radius:16px;background:#243253;color:#e8eefc;font-family:var(--f-display);font-weight:700;font-size:16px;padding:14px 4px;min-height:74px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.app.lock{opacity:.5}.app small{font-size:10px;font-weight:500;opacity:.85}
 @media (prefers-reduced-motion:reduce){.toast{animation:none}}
 </style>
 
@@ -94,13 +103,17 @@ input.txt{font:inherit;border:0;border-bottom:2px solid var(--ink);background:tr
   <div class="chip"><span class="lab">Day <span id="vDay">1</span></span><b id="vClock">7:30 AM</b></div>
   <div class="chip" id="hRep" hidden><span class="lab">Rating</span><b id="vRep">★ 2.5</b></div>
   <div class="spacer"></div>
+  <button class="chip" id="bPhone"><span class="lab" id="vPhoneLab">Phone</span></button>
   <button class="chip" id="bBag"><span class="lab">Bag</span><b id="vBag">0</b></button>
   <button class="chip" id="bShop" hidden><span class="lab">My shop</span></button>
   <button class="chip" id="bSound"><span class="lab">Sound on</span></button>
   <button class="chip" id="bHelp"><span class="lab">Help</span></button>
 </header>
 <div id="score" class="chip" hidden></div>
+<div id="nav" class="chip" hidden></div>
 <div id="acts">
+  <button class="btn" id="bEnter" hidden></button>
+  <button class="btn" id="bExit" hidden>Get out here</button>
   <button class="btn" id="bShout" hidden>Call out "Aao aao!"</button>
   <button class="btn" id="bCounter" hidden>Go behind my counter</button>
 </div>
@@ -734,12 +747,13 @@ cvEl.addEventListener('wheel',e=>{cam.fov=clamp(cam.fov+e.deltaY*.03,38,78);e.pr
   j.addEventListener('pointerdown',e=>{id=e.pointerId;j.setPointerCapture(id);set(e)});j.addEventListener('pointermove',e=>{if(e.pointerId===id)set(e)});
   const end=()=>{id=null;joy.x=joy.y=0;k.style.transform=''};j.addEventListener('pointerup',end);j.addEventListener('pointercancel',end)})();
 function updateCam(dt){
+  if(mode==='drive')EXT.followCam(dt);
   if(mode==='walk'&&!paused){
     let f=0,s=0;if(keys.KeyW||keys.ArrowUp)f+=1;if(keys.KeyS||keys.ArrowDown)f-=1;if(keys.KeyD)s+=1;if(keys.KeyA)s-=1;
     if(keys.ArrowLeft)cam.yaw+=dt*1.6;if(keys.ArrowRight)cam.yaw-=dt*1.6;
     f-=joy.y;s+=joy.x;const sp=(keys.ShiftLeft?4:2.3)*dt,l=Math.hypot(f,s);
     if(l>.05){const n=Math.min(1,l);f/=l;s/=l;cam.x+=(-Math.sin(cam.yaw)*f+Math.cos(cam.yaw)*s)*sp*n;cam.z+=(-Math.cos(cam.yaw)*f-Math.sin(cam.yaw)*s)*sp*n;cam.bob+=dt*9*n;}
-    cam.x=clamp(cam.x,-22,26);cam.z=clamp(cam.z,1.5,4.1);
+    cam.x=clamp(cam.x,-118,118);cam.z=clamp(cam.z,1.5,4.1);
   }
   camera.position.set(cam.x,cam.y+(mode==='walk'?Math.sin(cam.bob)*.012:0),cam.z);
   camera.rotation.set(cam.pitch,cam.yaw,0);camera.fov=cam.fov;camera.updateProjectionMatrix();
@@ -749,18 +763,18 @@ addEventListener('resize',resize);
 
 // ---------- picking ----------
 const ray=new THREE.Raycaster(),_p=new THREE.Vector2();
-function pickRoots(){const a=rival.roots.slice();a.push(tlBoard);if(me)a.push(...me.roots);custs.forEach(c=>a.push(c.P.g));return a}
+function pickRoots(){const a=rival.roots.slice();a.push(...EXT.roots());a.push(tlBoard);if(me)a.push(...me.roots);custs.forEach(c=>a.push(c.P.g));return a}
 function pickAt(x,y){
   _p.set(x/innerWidth*2-1,-(y/innerHeight)*2+1);ray.setFromCamera(_p,camera);
   const hits=ray.intersectObjects(pickRoots().filter(o=>o.visible),true);
-  for(const h of hits){let o=h.object;while(o){if(o.userData&&o.userData.pick)return o.userData.pick;if(o.userData&&o.userData.cust)return {kind:'cust',c:o.userData.cust};o=o.parent}}
+  for(const h of hits){let o=h.object;while(o){if(o.userData&&o.userData.pick)return o.userData.pick;if(o.userData&&o.userData.cust)return {kind:'cust',c:o.userData.cust};if(o.userData&&o.userData.bcust)return {kind:'bcust',c:o.userData.bcust};o=o.parent}}
   return null;
 }
 function hover(x,y){
   const p=pickAt(x,y),t=$('#tip');
   if(!p||paused){t.hidden=true;cvEl.style.cursor='';return}
-  let s='';
-  if(p.kind==='item'){const it=BYID[p.id];s=it.name+' · '+fmt(p.shop===rival?R_ITEM(it):ST.price[it.id]);if(p.shop===me)s+=' · stock '+ST.stock[it.id]}
+  let s='';const ex=EXT.hover(p);
+  if(ex)s=ex;else if(p.kind==='item'){const it=BYID[p.id];s=it.name+' · '+fmt(p.shop===rival?R_ITEM(it):ST.price[it.id]);if(p.shop===me)s+=' · stock '+ST.stock[it.id]}
   else if(p.kind==='keeper')s=p.shop===rival?'Sharma ji — say hello':'';
   else if(p.kind==='plot')s='Shop to let — rent it';
   else if(p.kind==='cust')s=p.c.state==='wait'&&p.c.shop===me?'Customer waiting — click to serve':'Passer-by';
@@ -768,8 +782,9 @@ function hover(x,y){
   t.textContent=s;t.hidden=false;t.style.left=x+'px';t.style.top=y+'px';cvEl.style.cursor='pointer';
 }
 function click(x,y){
-  if(paused||!started)return;audioInit();
+  if(paused||!started||mode==='drive')return;audioInit();
   const p=pickAt(x,y);if(!p){closeItem();return}
+  if(EXT.click(p))return;
   if(p.kind==='item'){if(p.shop===rival){openItem(p.id)}else openShop('stock')}
   else if(p.kind==='keeper'){if(p.shop===rival)chat()}
   else if(p.kind==='plot')openBuild();
@@ -854,7 +869,7 @@ function openBag(){
     el.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{const k=b.dataset.e;ST.bag[k]--;ST.yums++;SFX.crunch();toast('Yum! '+BYID[k].name);refreshHud();render()});$('#bx').onclick=closeModal};
   openModal();render();
 }
-function openModal(){paused=true;$('#modal').hidden=false}
+function openModal(){paused=true;$('#modal').hidden=false;$('#modalBody').classList.remove('phone')}
 function closeModal(){paused=false;$('#modal').hidden=true}
 function closeAll(){if(!$('#modal').hidden)closeModal();closeItem()}
 $('#modal').addEventListener('pointerdown',e=>{if(e.target.id==='modal')closeModal()});
@@ -910,18 +925,21 @@ function openShop(tab){
       `<div class="muted" style="line-height:18px">Each row: your stock, your selling price (− / +), and buying 10 more from the wholesaler. Cheaper than Sharma ji pulls his customers over.</div>`;
     }else if(tab==='up'){
       body=UPS.map(u=>{const has=ST.up[u.id];return `<div class="row"><div class="grow"><b>${u.name}</b><div class="muted" style="line-height:16px">${u.desc}</div></div>${has?'<b class="good">Owned</b>':`<button class="btn ghost" data-u="${u.id}" ${ST.cash<u.cost?'disabled':''}>${fmt(u.cost)}</button>`}</div>`}).join('');
+    }else if(tab==='staff'){
+      body=`<div class="row"><span class="grow">Extra staff at your stall</span><b class="amt">${XS.kStaff} / 4</b></div><div class="row"><span class="grow">Wage per day each</span><b class="amt">${fmt(100)}</b></div><div class="muted" style="line-height:18px">Staff serve waiting customers for you and make the stall more attractive. Wages come out at midnight.</div><div class="row"><button class="btn" id="khire" ${XS.kStaff>=4||ST.cash<250?'disabled':''}>Hire · ${fmt(250)}</button><button class="btn ghost" id="kfire" ${XS.kStaff<=0?'disabled':''}>Let one go</button></div>`;
     }else{
       body=`<div class="row"><span class="grow">Rating</span><b>★ ${ST.rep.toFixed(1)}</b></div><div class="row"><span class="grow">Today: your sales</span><b class="amt">${fmt(ST.today.me)}</b></div>
       <div class="row"><span class="grow">Today: Sharma ji's sales</span><b class="amt">${fmt(ST.today.rival)}</b></div><div class="row"><span class="grow">Customers served, all days</span><b class="amt">${ST.total.sales}</b></div>
       <div class="row"><span class="grow">Total earned from customers</span><b class="amt">${fmt(ST.total.me)}</b></div><div class="muted">Customers choose by price, shelf stock, lights, music, signs and your rating. Wait too long and they walk off.</div>`;
     }
     el.innerHTML=`<div class="row"><h2 class="grow">${ST.name}</h2><b class="amt">${fmt(ST.cash)}</b></div>
-    <div class="tabs"><button data-t="stock" class="${tab==='stock'?'on':''}">Stock & prices</button><button data-t="up" class="${tab==='up'?'on':''}">Upgrades</button><button data-t="st" class="${tab==='st'?'on':''}">Numbers</button></div>${body}
+    <div class="tabs"><button data-t="stock" class="${tab==='stock'?'on':''}">Stock & prices</button><button data-t="up" class="${tab==='up'?'on':''}">Upgrades</button><button data-t="staff" class="${tab==='staff'?'on':''}">Staff</button><button data-t="st" class="${tab==='st'?'on':''}">Numbers</button></div>${body}
     <div class="row"><button class="btn ghost" id="sx">Close</button></div>`;
     el.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});$('#sx').onclick=()=>{closeModal();save()};
     el.querySelectorAll('[data-pm]').forEach(b=>b.onclick=()=>{ST.price[b.dataset.pm]=Math.max(1,ST.price[b.dataset.pm]-1);applyShop();render()});
     el.querySelectorAll('[data-pp]').forEach(b=>b.onclick=()=>{ST.price[b.dataset.pp]=Math.min(BYID[b.dataset.pp].price*3,ST.price[b.dataset.pp]+1);applyShop();render()});
     el.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{const it=BYID[b.dataset.b],c=Math.round(it.ws*10);if(ST.cash>=c){ST.cash-=c;ST.stock[it.id]=Math.min(60,ST.stock[it.id]+10);SFX.coin();applyShop();refreshHud();render()}});
+    {const h=$('#khire');if(h)h.onclick=()=>{if(ST.cash>=250&&XS.kStaff<4){ST.cash-=250;XS.kStaff++;SFX.ding();refreshHud();render()}};const f=$('#kfire');if(f)f.onclick=()=>{if(XS.kStaff>0){XS.kStaff--;render()}}}
     el.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{const u=UPS.find(x=>x.id===b.dataset.u);if(ST.cash>=u.cost){ST.cash-=u.cost;ST.up[u.id]=1;SFX.ding();applyShop();refreshHud();toast(u.name+' installed');render()}});
   };render();
 }
@@ -941,7 +959,7 @@ function attract(shop,c){
   if(shop===rival){const f=clamp(1+(1-ST.rivalMult)*1.6,.3,1.8);return 1*f}
   let a=1;const u=ST.up;
   if(u.sign)a+=.3;if(u.lights)a+=.15+NIGHT*.5;if(u.banner)a+=.2;if(u.speaker)a+=.3;if(u.rack)a+=.2;if(u.fridge)a+=.2;if(u.paint)a+=.2;
-  a+=(ST.rep-2.5)*.16+ST.shout*.9;a-=.2*shop.slots.filter(s=>s.busy).length;
+  a+=(ST.rep-2.5)*.16+ST.shout*.9+XS.kStaff*.05;a-=.2*shop.slots.filter(s=>s.busy).length;
   let ps=0,rs=0,have=0;c.want.forEach(w=>{const it=BYID[w.id];ps+=ST.price[it.id]*w.qty;rs+=it.price*w.qty;if(ST.stock[it.id]>0&&unlocked(it))have++});
   const r=ps/Math.max(1,rs),f=clamp(1+(1-r)*1.6,.2,1.8),av=.35+.65*have/c.want.length;
   return Math.max(.05,a*f*av*(NIGHT>.6&&!u.lights&&!u.speaker?.6:1));
@@ -988,12 +1006,12 @@ function updateCust(c,dt){
   }else if(c.state==='in'){if(go(c.slot.x,c.slot.z,c.spd*.8)){c.state='wait';c.t=0;
       const ty=Math.atan2(0,-1);g.rotation.y=Math.PI;
       if(c.shop===rival){setPose(rival.keeper,'hold');say(rival,pick(LINES.hi),2)}
-      else{c.bub=ST.up.helper?null:bubble(c.P.head,'<span>'+wantText(c)+'</span><br><u>Tap to serve</u>',{act:1,ttl:Infinity,off:.3,max:40,onClick:()=>serve(c)});}}}
+      else{c.bub=(ST.up.helper||XS.kStaff>0)?null:bubble(c.P.head,'<span>'+wantText(c)+'</span><br><u>Tap to serve</u>',{act:1,ttl:Infinity,off:.3,max:40,onClick:()=>serve(c)});}}}
   else if(c.state==='wait'){
     c.t+=dt;g.rotation.y=Math.PI;
     if(c.shop===rival){if(c.t>2.6){let tot=0;c.want.forEach(w=>tot+=BYID[w.id].price*w.qty*ST.rivalMult);ST.today.rival+=Math.round(tot);setPose(rival.keeper,'give');setTimeout(()=>{if(!busy)setPose(rival.keeper,'idle')},900);SFX.coin();leave(c,true)}}
     else if(c.shop===me){
-      if(ST.up.helper&&c.t>2.2){serve(c)}
+      if((ST.up.helper||XS.kStaff>0)&&c.t>Math.max(1,(2.2-.25*XS.kStaff)*(XS.lunch?.75:1))){serve(c)}
       else if(c.t>26){ST.rep=clamp(ST.rep-.15,0,5);leave(c,false);refreshHud()}
     }
   }else if(c.state==='out'){
@@ -1041,16 +1059,446 @@ function refreshHud(){
   {const b=$('#bShout');if(b){const w=Math.ceil(ST.shoutCd);b.textContent=w>0?'Aao aao! ('+w+'s)':'Call out "Aao aao!"';b.style.opacity=w>0?.6:1}}
   $('#score').textContent=`Today · You ${fmt(ST.today.me)} · Sharma ji ${fmt(ST.today.rival)}`;
 }
-function save(){try{localStorage.setItem('kirana-v1',JSON.stringify({cash:ST.cash,day:ST.day,min:ST.min,bag:ST.bag,built:ST.built,name:ST.name,up:ST.up,stock:ST.stock,price:ST.price,rep:ST.rep,total:ST.total,yums:ST.yums}))}catch(e){}}
-function load(){try{const s=JSON.parse(localStorage.getItem('kirana-v1'));if(!s||typeof s.cash!=='number')return false;Object.assign(ST,s);ST.today={me:0,rival:0};return true}catch(e){return false}}
+function save(){try{localStorage.setItem('kirana-v1',JSON.stringify({cash:ST.cash,day:ST.day,min:ST.min,bag:ST.bag,built:ST.built,name:ST.name,up:ST.up,stock:ST.stock,price:ST.price,rep:ST.rep,total:ST.total,yums:ST.yums,ext:XS}))}catch(e){}}
+function load(){try{const s=JSON.parse(localStorage.getItem('kirana-v1'));if(!s||typeof s.cash!=='number')return false;Object.assign(ST,s);ST.today={me:0,rival:0};mergeXS(s.ext);return true}catch(e){return false}}
 function peek(){try{return JSON.parse(localStorage.getItem('kirana-v1'))}catch(e){return null}}
 function newDay(){
   const sum=`Day ${ST.day} done. You: ${fmt(ST.today.me)} · Sharma ji: ${fmt(ST.today.rival)}`;
   ST.day++;ST.today={me:0,rival:0};ST.rivalMult=Math.random()<.3?.9:1;
   if(!ST.built&&ST.cash<300){ST.cash+=200;toast('Dad topped up your pocket money: ₹200')}
   toast(sum);if(ST.rivalMult<1)setTimeout(()=>toast('Sharma ji has a 10% sale today!'),1500);
-  rival.refreshBoard(R_ITEM,()=>true);save();
+  rival.refreshBoard(R_ITEM,()=>true);EXT.day();refreshHud();save();
 }
+// ===================== TOWN EXTENSION =====================
+const EXT={roots:()=>[],click:()=>false,hover:()=>null,update(){},followCam(){},afterLoad(){},day(){}};
+const XS={bank:0,loan:0,phone:'basic',kStaff:0,lunch:0,nav:null,
+  branches:{elec:{built:false,name:'Gadget World',stock:{},price:{},staff:0,rep:2.5,today:0,total:0,sold:0},
+            med:{built:false,name:'Care Medicals',stock:{},price:{},staff:0,rep:2.5,today:0,total:0,sold:0}}};
+const NPCROOTS=[];
+function tarpTex(c1,c2){return mkTex(256,64,(c,w,h)=>{for(let i=0;i<8;i++){c.fillStyle=i%2?c2:c1;c.fillRect(i*32,0,32,h)}speckle(c,w,h,500,.2)},[1,1])}
+function sit(P){P.body.position.y=-.42;P.legs[0].rotation.x=-1.5;P.legs[1].rotation.x=-1.5;P.sitting=true}
+
+// ---------- extend the street so far places exist ----------
+for(let x=-112;x<-70;x+=14){lampPost(x,4.2,1);lampPost(x+7,11.8,-1)}
+for(let x=84;x<=112;x+=14){lampPost(x,4.2,1);lampPost(x+7,11.8,-1)}
+building(90,125,12,3001,-1,15,7,true);building(-125,-90,11,3002,-1,15,7,true);
+
+// ---------- town stalls (NPC) ----------
+const vendorLines={tea:['Chai chai, garam chai!','Adrak wali chai!'],fruit:['Taaza phal, taaza phal!','Kela, aam, santra!'],sweet:['Garam jalebi!','Mithai le lo, bhaiya!'],juice:['Thanda juice!','Ganne ka ras!'],paper:['Aaj ka akhbaar!'],chaat:['Chaat, golgappe!','Teekha ya meetha?']};
+const TOWN=[];
+function npcStall(cx,o){
+  const g=new THREE.Group();g.position.set(cx,0,0);scene.add(g);
+  const wood=M(0xffffff,{map:T.wood});
+  box(3.2,.9,.9,wood,0,G+.45,-.5,g);box(3.3,.05,1.0,M(o.top||0xe8e0cf),0,G+.93,-.5,g);
+  box(3.8,3.2,.08,M(o.wall||0xcdbf9f,{map:T.plaster}),0,G+1.6,-2.2,g);
+  [-1.8,1.8].forEach(x=>cyl(.04,.04,2.6,M(0x444444),x,G+1.3,.45,g,6));
+  const can=box(4.0,.05,2.8,M(0xffffff,{map:tarpTex(o.a1,o.a2)}),0,G+2.65,-.6,g);can.rotation.x=.08;
+  box(3.4,.5,.05,M(0xffffff,{map:textTex(256,48,o.sign||'#7a2a1a','#fff3c8',[o.name],'bold {s}px sans-serif')}),0,G+3.05,.7,g);
+  const cols=o.goods||[0xff8a1f];
+  for(let i=0;i<16;i++){const c=pick(cols);const m=M(c,{roughness:.6});
+    if(o.kind==='fruit'||o.kind==='juice')sph(.11,m,-1.3+(i%8)*.34,G+1.06+((i/8)|0)*.2,-.5+((i/8)|0)*.1,g,8,6);
+    else box(.2,.1,.2,m,-1.3+(i%8)*.34,G+1.0+((i/8)|0)*.12,-.5,g)}
+  if(o.kind==='tea'){cyl(.2,.25,.4,M(0xb8b8b8,{metalness:.6,roughness:.3}),-1.0,G+1.2,-.6,g,12);const ember=nightMat(M(0xff5a1a),0xff5a1a,.8,1.6);box(.35,.05,.35,ember,-1.0,G+.97,-.6,g,false)}
+  const lamp=nightMat(M(0xffffff),0xfff1c8,.5,2.4);box(1.2,.04,.06,lamp,0,G+2.55,.2,g,false);
+  const v=makePerson({skin:pick(SKIN),top:pick(TOPS),bottom:0x3a3a3a,apron:o.apron||0xeeeeee,mustache:Math.random()<.6,hair:0x15100c,scale:1.0});v.g.position.set(.2,G,-1.15);g.add(v.g);setPose(v,'hold');
+  v.g.userData.pick={kind:'npc',name:o.name,lines:vendorLines[o.kind]};v.head.userData.hv=1;
+  const S={g,cx,v,kind:o.kind,name:o.name,slots:[{x:cx-.9,z:1.0,busy:false},{x:cx+.9,z:1.0,busy:false}]};
+  if(o.kind==='tea'){[-.9,.9].forEach((x,i)=>{box(1.2,.08,.35,wood,x,G+.45,1.9,g);box(.06,.4,.06,wood,x-.5,G+.2,1.9,g);box(.06,.4,.06,wood,x+.5,G+.2,1.9,g);
+      const sp=makePerson({skin:pick(SKIN),top:pick(TOPS),bottom:pick(BOTS),hair:0x15100c});sp.g.position.set(x,G+.02,1.9);sp.g.rotation.y=Math.PI;g.add(sp.g);sit(sp);S.sitters=(S.sitters||[]).concat([sp])})}
+  TOWN.push(S);NPCROOTS.push(v.g);return S;
+}
+npcStall(-13.5,{name:'Gupta Chai Stall',kind:'tea',a1:'#2e7d5b',a2:'#f1e6c9',goods:[0xd9a441,0xf3efe2]});
+npcStall(-20.5,{name:'Fresh Fruits',kind:'fruit',a1:'#c0392b',a2:'#f4ead0',goods:[0xe74c3c,0xf1c40f,0x27ae60,0xe67e22]});
+npcStall(-27.5,{name:'Daily News',kind:'paper',a1:'#34495e',a2:'#f4ead0',goods:[0xf5f5f5,0xffd166,0x8ecae6]});
+npcStall(19.5,{name:'Mithai Ghar',kind:'sweet',a1:'#d35400',a2:'#fff1c8',goods:[0xf39c12,0xe67e22,0xfad390,0xb33771]});
+npcStall(26,{name:'Juice Corner',kind:'juice',a1:'#16a085',a2:'#f4ead0',goods:[0xf39c12,0x2ecc71,0xe74c3c]});
+npcStall(32.5,{name:'Golgappa Wala',kind:'chaat',a1:'#8e44ad',a2:'#f4ead0',goods:[0xd9a441,0xc8651b,0xe8c15a]});
+
+// ---------- far destinations ----------
+const DEST={bank:{name:'Bharat Savings Bank',x:106},rest:{name:'Spice Garden Restaurant',x:-106},home:{name:'Your stalls',x:3},elec:{name:'Gadget World (showroom)',x:11.8},med:{name:'Care Medicals',x:-6}};
+(function farBuildings(){
+  // bank
+  const b=new THREE.Group();b.position.set(DEST.bank.x,0,0);scene.add(b);
+  const stone=M(0xe6dfd0,{map:T.plaster});
+  box(18,8,6,stone,0,G+4,-5.2,b);box(18.6,.4,6.6,M(0xb9ae98),0,G+8.2,-5.2,b);
+  for(let i=0;i<6;i++)cyl(.35,.4,6.4,M(0xf2eee4),-7.2+i*2.9,G+3.4,-1.6,b,12);
+  box(18.8,.6,2,M(0xcfc6b0),0,G+6.9,-1.6,b);box(18,.3,3,M(0xb9ae98),0,G+.15,-.3,b);box(16,.3,2,M(0xc9bfa8),0,G+.4,-1.3,b);
+  const sb=nightMat(M(0xffffff),0xffffff,0,.9);sb.map=textTex(512,80,'#0d3b66','#ffd166',['BHARAT SAVINGS BANK'],'bold {s}px sans-serif');sb.emissiveMap=sb.map;
+  box(9,1.1,.2,sb,0,G+7.7,-.5,b);
+  box(3,3.6,.1,M(0x1b3a4b,{roughness:.2}),0,G+2.0,-2.4,b);
+  const atm=new THREE.Group();atm.position.set(-6.5,G,-1.2);b.add(atm);box(1.1,2.2,.8,M(0x1f2f5a),0,1.1,0,atm);box(.8,.5,.05,nightMat(M(0x66ff99),0x66ff99,.5,1.5),0,1.5,.43,atm,false);
+  [-6.4,-8.2].forEach((x,k)=>{const p=makePerson({skin:pick(SKIN),top:pick(TOPS),bottom:pick(BOTS),hair:0x15100c});p.g.position.set(x,G,.6+k*.2);p.g.rotation.y=Math.PI;b.add(p.g)});
+  glowSprite(0,G+7.7,.2,9,b,0xaad4ff).userData.max=.35;
+  // restaurant
+  const r=new THREE.Group();r.position.set(DEST.rest.x,0,0);scene.add(r);
+  box(18,6.5,6,M(0xe8a76a,{map:T.plaster}),0,G+3.25,-5.2,r);box(18.4,.3,6.4,M(0x7a3b1d),0,G+6.6,-5.2,r);
+  const can=box(17,.1,4.5,M(0xffffff,{map:tarpTex('#b3261e','#f6e7c1')}),0,G+3.6,-.2,r);can.rotation.x=.12;
+  const rs=nightMat(M(0xffffff),0xffffff,0,1);rs.map=textTex(512,96,'#4a1d0f','#ffd166',['SPICE GARDEN'],'bold {s}px sans-serif');rs.emissiveMap=rs.map;
+  box(8,1.2,.2,rs,0,G+5.5,-2.1,r);box(4,3,.1,M(0xffe7b0,{roughness:.3}),0,G+1.6,-2.4,r);
+  for(let i=0;i<5;i++){const x=-6.5+i*3.2;cyl(.5,.5,.06,M(0xf5efe0),x,G+.8,1.5,r,14);cyl(.06,.06,.8,M(0x444444),x,G+.4,1.5,r,6);
+    [-.8,.8].forEach(s=>box(.4,.06,.4,wood2(),x+s,G+.5,1.5,r));
+    if(i%2===0){const d=makePerson({skin:pick(SKIN),top:pick(TOPS),bottom:pick(BOTS),hair:0x15100c});d.g.position.set(x-.8,G+.02,1.5);d.g.rotation.y=Math.PI/2;r.add(d.g);sit(d)}}
+  const w=makePerson({skin:SKIN[1],top:0xf4f1ea,bottom:0x222222,apron:0x7a1f1f,mustache:1,hair:0x111111});w.g.position.set(2.6,G,.4);r.add(w.g);setPose(w,'hold');
+  const lamp=nightMat(M(0xffffff),0xffe3a8,.4,2.2);for(let i=0;i<10;i++)sph(.08,lamp,-8+i*1.8,G+3.3,1.9+Math.sin(i)*.05,r,6,4);
+  glowSprite(0,G+5.5,.2,9,r,0xffcf88).userData.max=.35;
+})();
+function wood2(){return M(0x7a4a2a)}
+
+// ---------- townsfolk ----------
+const tfolk=[];let tfT=3,vendT=8;
+function spawnTown(){
+  const s=pick(TOWN),k=randomCustomer(),dir=Math.random()<.5?1:-1;
+  const sl=s.slots.find(x=>!x.busy);if(!sl)return;sl.busy=true;
+  const c={P:k.P,spd:k.spd,dir,lane:rnd(2.2,3.9),state:'walk',stall:s,slot:sl,t:0,wt:rnd(3,6)};
+  c.P.g.position.set(-dir*38+s.cx*0.0,G,c.lane);scene.add(c.P.g);tfolk.push(c);
+}
+function updateTown(c,dt){
+  const g=c.P.g,p=g.position;let mv=0;
+  const go=(tx,tz,sp)=>{const dx=tx-p.x,dz=tz-p.z,l=Math.hypot(dx,dz);if(l<.06)return true;const s=Math.min(l,sp*dt);p.x+=dx/l*s;p.z+=dz/l*s;let d=Math.atan2(dx,dz)-g.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));g.rotation.y+=d*Math.min(1,dt*8);mv=sp;return false};
+  if(c.state==='walk'){const d=c.slot.x-p.x;if(Math.abs(d)>.3&&Math.sign(d)!==c.dir)c.dir=Math.sign(d);if(Math.abs(d)<.3)c.state='in';else go(p.x+c.dir*3,c.lane,c.spd)}
+  else if(c.state==='in'){if(go(c.slot.x,c.slot.z,c.spd*.8)){c.state='wait';c.t=0;g.rotation.y=Math.PI;setPose(c.P,'hold')}}
+  else if(c.state==='wait'){c.t+=dt;g.rotation.y=Math.PI;if(c.t>c.wt){setPose(c.P,'idle');c.slot.busy=false;c.state='out';c.dir=Math.random()<.5?1:-1;SFX.coin()}}
+  else if(c.state==='out'){go(p.x+c.dir*.2,c.lane,c.spd);if(Math.abs(p.z-c.lane)<.15)c.state='gone'}
+  else if(c.state==='gone'){go(p.x+c.dir*3,c.lane,c.spd);if(Math.abs(p.x)>42)c.dead=true}
+  updatePerson(c.P,dt,performance.now()/1000,mv);
+}
+function updateTownAll(sd,dt,t){
+  tfT-=sd;if(tfT<=0){tfT=rnd(3,7)/(.3+trafficRate(hourOf()));if(tfolk.length<14)spawnTown()}
+  tfolk.forEach(c=>updateTown(c,sd));for(let i=tfolk.length-1;i>=0;i--)if(tfolk[i].dead){scene.remove(tfolk[i].P.g);tfolk.splice(i,1)}
+  TOWN.forEach(s=>{updatePerson(s.v,dt,t,0);(s.sitters||[]).forEach(p=>updatePerson(p,dt,t,0))});
+  vendT-=sd;if(vendT<=0){vendT=rnd(9,16);const s=pick(TOWN);if(Math.abs(camera.position.x-s.cx)<34&&DAYL>.3)bubble(s.v.head,pick(vendorLines[s.kind]),{ttl:3,off:.3,max:40})}
+}
+// ---------- branch shops: electronics showroom + medical store ----------
+const ELEC=[
+ {id:'e_basic',name:'Basic Phone',price:1500,ws:1100,lot:1,w:6,color:'#555555'},
+ {id:'e_smart',name:'Smartphone',price:9000,ws:7200,lot:1,w:6,color:'#1f6fd0'},
+ {id:'e_buds',name:'Earbuds',price:800,ws:520,lot:2,w:15,color:'#e9e9e9'},
+ {id:'e_chg',name:'Fast Charger',price:400,ws:250,lot:5,w:30,color:'#2d2d2d'},
+ {id:'e_pb',name:'Power Bank',price:1200,ws:800,lot:2,w:10,color:'#f2a31b'},
+ {id:'e_watch',name:'Smart Watch',price:2500,ws:1800,lot:1,w:6,color:'#8e44ad'},
+ {id:'e_case',name:'Phone Case',price:250,ws:120,lot:5,w:25,color:'#e76f51'}];
+const MED=[
+ {id:'m_para',name:'Paracetamol Strip',price:30,ws:20,lot:10,w:30,color:'#ffffff'},
+ {id:'m_syrup',name:'Cough Syrup',price:90,ws:60,lot:5,w:12,color:'#c0392b'},
+ {id:'m_band',name:'Bandage Roll',price:25,ws:15,lot:10,w:15,color:'#f4d6b0'},
+ {id:'m_anta',name:'Antacid Tablets',price:40,ws:26,lot:10,w:15,color:'#2ecc71'},
+ {id:'m_vitc',name:'Vitamin C',price:120,ws:80,lot:5,w:8,color:'#f39c12'},
+ {id:'m_mask',name:'Mask Pack',price:50,ws:30,lot:10,w:8,color:'#5dade2'},
+ {id:'m_san',name:'Hand Sanitizer',price:60,ws:40,lot:5,w:8,color:'#76d7c4'},
+ {id:'m_thermo',name:'Thermometer',price:250,ws:170,lot:2,w:4,color:'#bb8fce'}];
+const BITEM={};ELEC.concat(MED).forEach(i=>BITEM[i.id]=i);
+const BDEF={
+ elec:{key:'elec',cx:11.8,rent:900,items:ELEC,wall:0xdfe6f0,signBg:'#0b2a6b',label:'ELECTRONICS SHOWROOM',staffCost:400,wage:180,defName:'Gadget World',coat:0x1f6fd0},
+ med:{key:'med',cx:-6.0,rent:700,items:MED,wall:0xeaf4ee,signBg:'#0b6b3a',label:'MEDICAL STORE',staffCost:350,wage:150,defName:'Care Medicals',coat:0xffffff}};
+const BR={},PLOT2={};
+function binit(){for(const k in BDEF){const b=XS.branches[k];BDEF[k].items.forEach(i=>{if(b.stock[i.id]==null)b.stock[i.id]=0;if(b.price[i.id]==null)b.price[i.id]=i.price})}}
+binit();
+const stepOf=it=>Math.max(1,Math.round(it.price*.05));
+
+function makePlot2(def){
+  const g=new THREE.Group();g.position.set(def.cx,0,0);scene.add(g);
+  box(6.4,.04,3.2,M(0xffffff,{map:T.dirt}),0,G+.02,-.7,g,false);
+  for(let i=0;i<10;i++)box(.22,.1,.1,M(0xb5532f),-2.4+(i%5)*.24,G+.09+((i/5)|0)*.1,-1.7,g);
+  const tx=textTex(256,160,'#f4c20d','#8b1a10',[def.key==='elec'?'SHOWROOM':'MEDICAL','TO LET','Rent '+fmt(def.rent)],'bold {s}px sans-serif');
+  const bd=new THREE.Group();bd.position.set(0,0,.5);g.add(bd);
+  cyl(.04,.04,1.9,M(0x444444),-.5,G+.95,0,bd,6);cyl(.04,.04,1.9,M(0x444444),.5,G+.95,0,bd,6);box(1.4,.9,.05,M(0xffffff,{map:tx}),0,G+1.55,.03,bd);
+  bd.userData.pick={kind:'plot2',key:def.key};PLOT2[def.key]=g;g.userData.board=bd;
+}
+makePlot2(BDEF.elec);makePlot2(BDEF.med);
+
+const BSLOTS=[0,-1.2,1.2,-2.4,2.4,0];
+const STAFFPOS=[[-1.5,-1.0],[1.5,-1.0],[-2.5,-1.0],[2.5,-1.0],[-1.0,-1.7],[1.0,-1.7],[-2.0,-1.7],[2.0,-1.7]];
+function buildBranch(def,animate){
+  const b=XS.branches[def.key],g=new THREE.Group();g.position.x=def.cx;scene.add(g);
+  const B={def,g,cx:def.cx,staffP:[],slots:BSLOTS.slice(0,5).map(o=>({x:def.cx+o,z:.95,busy:false})),t:0};
+  const W=6.2,wall=M(def.wall,{map:T.plaster}),wood=M(0xffffff,{map:T.wood}),white=M(0xf4f4f0,{roughness:.5});
+  box(W+.2,.05,3.4,M(0xb9b6ac),0,G+.025,-.7,g,false);
+  box(W,3.6,.08,wall,0,G+1.8,-2.3,g);box(.08,3.6,3,wall,-W/2,G+1.8,-.8,g);box(.08,3.6,3,wall,W/2,G+1.8,-.8,g);
+  // counter
+  box(W-.3,.08,.95,white,0,G+.04,-.5,g);box(W-.3,.06,.95,wood,0,G+.97,-.5,g);box(W-.3,.85,.04,white,0,G+.5,-.95,g);
+  for(const x of [-W/2+.15,W/2-.15])box(.08,.95,.95,white,x,G+.5,-.5,g);
+  const cg=new THREE.Mesh(new THREE.PlaneGeometry(W-.4,.85),CGLASS);cg.position.set(0,G+.52,-.02);g.add(cg);
+  // back shelving with products (instanced) and glowing screens / cross
+  const prod=new THREE.InstancedMesh(new THREE.BoxGeometry(.2,.28,.1),M(0xffffff,{roughness:.5}),72),m4=new THREE.Matrix4(),cc=new THREE.Color();
+  for(let r=0;r<3;r++){box(W-.4,.04,.4,white,0,G+1.3+r*.55,-2.0,g);for(let i=0;i<24;i++){const x=-W/2+.4+i*(W-.8)/23;m4.makeTranslation(x,G+1.46+r*.55,-2.0);prod.setMatrixAt(r*24+i,m4);cc.set(def.items[(r*7+i)%def.items.length].color);cc.offsetHSL(0,0,(Math.random()-.5)*.1);prod.setColorAt(r*24+i,cc)}}
+  prod.raycast=()=>{};g.add(prod);B.prod=prod;
+  const scr=nightMat(M(0x66ccff),0x66ccff,.5,1.4);if(def.key==='elec')for(let i=0;i<8;i++)box(.34,.2,.02,scr,-2.4+i*.68,G+2.9,-2.22,g,false);
+  // sign + roof
+  box(W+.4,.15,3.6,M(0xdad8d0),0,G+3.5,-.5,g);
+  const sg=nightMat(new THREE.MeshStandardMaterial({roughness:.5}),0xffffff,0,.9);
+  sg.map=textTex(768,120,def.signBg,'#ffffff',[b.name.toUpperCase().slice(0,22)],'bold {s}px sans-serif',(c,w,h)=>{c.fillStyle='rgba(255,255,255,.15)';c.fillRect(0,h-14,w,14)});sg.emissiveMap=sg.map;B.signMat=sg;
+  box(W+.2,.95,.12,sg,0,G+4.0,.95,g);
+  if(def.key==='med'){const cr=nightMat(M(0x22cc66),0x22cc66,.6,2);box(.7,.22,.06,cr,W/2-.6,G+3.2,1.0,g,false);box(.22,.7,.06,cr,W/2-.6,G+3.2,1.0,g,false)}
+  else{const neon=nightMat(M(0x66aaff),0x66aaff,.6,2.2);box(W,.06,.05,neon,0,G+3.55,1.0,g,false)}
+  const tube=nightMat(M(0xffffff),0xf2f8ff,.6,2.4);box(2.2,.05,.08,tube,0,G+3.35,.4,g,false);box(2.2,.05,.08,tube,-2.2,G+3.35,.4,g,false);box(2.2,.05,.08,tube,2.2,G+3.35,.4,g,false);
+  const pl=new THREE.PointLight(0xf2f6ff,0,10,2);pl.position.set(0,G+3,.3);g.add(pl);B.light=pl;
+  glowSprite(0,G+4.0,1.3,7,g,def.key==='med'?0x66ffaa:0x77aaff).userData.max=.4;
+  // owner/keeper + staff
+  B.keeper=makePerson({skin:SKIN[3],top:def.coat,bottom:0x2b3a55,hair:0x15100c,longSleeve:1,glasses:def.key==='med',scale:1.0});B.keeper.g.position.set(0,G,-1.1);g.add(B.keeper.g);setPose(B.keeper,'hold');
+  g.userData.pick={kind:'branch',key:def.key};
+  B.syncStaff=()=>{while(B.staffP.length<b.staff&&B.staffP.length<8){const sp=STAFFPOS[B.staffP.length],p=makePerson({skin:pick(SKIN),top:def.coat===0xffffff?0xffffff:pick([0x1f6fd0,0x2e9b57,0xc3352b]),bottom:0x2b3a55,hair:0x15100c,scale:.97});p.g.position.set(sp[0],G,sp[1]);g.add(p.g);setPose(p,'hold');B.staffP.push(p)}
+    B.staffP.forEach((p,i)=>p.g.visible=i<b.staff)};
+  B.viz=()=>{let tot=0,cap=0;def.items.forEach(i=>{tot+=b.stock[i.id];cap+=i.lot*4});prod.count=Math.round(72*clamp(tot/Math.max(1,cap),0,1)*(tot>0?1:0)+(tot>0?6:0));prod.count=Math.min(72,prod.count)};
+  B.update=(t,dt)=>{B.light.intensity=(.3+NIGHT*1.8);[B.keeper].concat(B.staffP).forEach(p=>updatePerson(p,dt,t,0));
+    const P=B.keeper;const dx=camera.position.x-B.cx,dz=camera.position.z+1.1;P.head.rotation.y+=(clamp(Math.atan2(dx,dz),-.9,.9)-P.head.rotation.y)*Math.min(1,dt*3)};
+  B.syncStaff();B.viz();
+  if(animate){g.scale.y=.01;B.bt=0;SFX.build()}
+  BR[def.key]=B;PLOT2[def.key].visible=false;return B;
+}
+function bAttract(key,c){
+  const b=XS.branches[key];let a=1+b.staff*.06+(b.rep-2.5)*.14;if(key==='med'&&NIGHT>.5)a+=.3;if(NIGHT>.5&&key==='elec')a-=.25;
+  let ps=0,rs=0,have=0;c.want.forEach(w=>{const it=BITEM[w.id];ps+=b.price[w.id]*w.qty;rs+=it.price*w.qty;if(b.stock[w.id]>0)have++});
+  const r=ps/Math.max(1,rs),f=clamp(1+(1-r)*1.7,.2,1.8),av=.2+.8*have/c.want.length;return Math.max(.05,a*f*av);
+}
+const bcusts=[];const bSpawn={elec:4,med:3};
+function wpick(items){let t=items.reduce((a,i)=>a+i.w,0),r=Math.random()*t;for(const i of items){r-=i.w;if(r<0)return i}return items[0]}
+function spawnBranchCust(key){
+  const def=BDEF[key],B=BR[key],k=randomCustomer(),dir=Math.random()<.5?1:-1,want=[];
+  const n=key==='med'?1+((Math.random()*3)|0):1;
+  for(let i=0;i<n;i++){const it=wpick(def.items);if(!want.find(w=>w.id===it.id))want.push({id:it.id,qty:key==='med'?1+((Math.random()*2)|0):1})}
+  const c={P:k.P,key,spd:k.spd,dir,lane:rnd(2.2,3.9),state:'walk',want,slot:null,t:0};
+  const a=bAttract(key,c);if(Math.random()<a/(a+1)){const sl=B.slots.find(s=>!s.busy);if(sl){sl.busy=true;c.slot=sl}}
+  c.P.g.position.set(-dir*40,G,c.lane);scene.add(c.P.g);c.P.g.userData.bcust=c;c.P.g.traverse(m=>{if(m.isMesh)m.userData.bcust=c});bcusts.push(c);
+}
+const bwant=c=>c.want.map(w=>w.qty+'× '+BITEM[w.id].name).join(', ');
+function bLeave(c,ok){if(c.slot){c.slot.busy=false;c.slot=null}if(c.bub){killBub(c.bub);c.bub=null}c.state='out';if(ok!==undefined)bubble(c.P.head,ok?'Thanks!':'Hmm, not here.',{ttl:2,off:.3})}
+function bServe(c){
+  if(c.state!=='wait'||!c.slot)return;const b=XS.branches[c.key],B=BR[c.key];let total=0,lines=0,all=true;
+  c.want.forEach(w=>{const n=Math.min(w.qty,b.stock[w.id]);if(n<w.qty)all=false;if(n>0){total+=n*b.price[w.id];b.stock[w.id]-=n;lines++}});
+  if(c.bub){killBub(c.bub);c.bub=null}
+  if(!lines){b.rep=clamp(b.rep-.2,0,5);bLeave(c,false);B.viz();SFX.no();return}
+  ST.cash+=total;b.today+=total;b.total+=total;b.sold++;b.rep=clamp(b.rep+(all?.12:.04),0,5);
+  SFX.coin();bubble(B.g.position.clone().add(new THREE.Vector3(0,1.6,-.3)),'+'+fmt(total),{float:1,ttl:1.6,off:.5});
+  const P=B.staffP.length?B.staffP[(Math.random()*Math.min(B.staffP.length,b.staff))|0]:B.keeper;setPose(P,'give');setTimeout(()=>setPose(P,'hold'),900);
+  bLeave(c,true);B.viz();refreshHud();
+}
+function updateBCust(c,dt){
+  const g=c.P.g,p=g.position;let mv=0;
+  const go=(tx,tz,sp)=>{const dx=tx-p.x,dz=tz-p.z,l=Math.hypot(dx,dz);if(l<.06)return true;const s=Math.min(l,sp*dt);p.x+=dx/l*s;p.z+=dz/l*s;let d=Math.atan2(dx,dz)-g.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));g.rotation.y+=d*Math.min(1,dt*8);mv=sp;return false};
+  const b=XS.branches[c.key];
+  if(c.state==='walk'){
+    if(c.slot){const d=c.slot.x-p.x;if(Math.abs(d)>.3&&Math.sign(d)!==c.dir)c.dir=Math.sign(d);if(Math.abs(d)<.3)c.state='in'}
+    if(c.state==='walk'){go(p.x+c.dir*3,c.lane,c.spd);if(Math.abs(p.x)>44){c.dead=true;if(c.slot)c.slot.busy=false}}
+  }else if(c.state==='in'){if(go(c.slot.x,c.slot.z,c.spd*.8)){c.state='wait';c.t=0;g.rotation.y=Math.PI;
+      if(!b.staff)c.bub=bubble(c.P.head,'<span>'+bwant(c)+'</span><br><u>Tap to serve</u>',{act:1,ttl:Infinity,off:.3,max:40,onClick:()=>bServe(c)})}}
+  else if(c.state==='wait'){c.t+=dt;g.rotation.y=Math.PI;
+    if(b.staff>0&&c.t>Math.max(1.1,(4.2-.55*b.staff)*(XS.lunch?.75:1)))bServe(c);
+    else if(c.t>28){b.rep=clamp(b.rep-.15,0,5);bLeave(c,false)}}
+  else if(c.state==='out'){go(p.x+c.dir*.2,c.lane,c.spd);if(Math.abs(p.z-c.lane)<.15)c.state='walk'}
+  updatePerson(c.P,dt,performance.now()/1000,mv);
+}
+
+// ---------- rent + manage ----------
+function openRent(key){
+  const def=BDEF[key],b=XS.branches[key],el=$('#modalBody');openModal();
+  el.innerHTML=`<h2>Rent the ${key==='elec'?'electronics showroom':'medical store'}</h2><div class="muted">${key==='elec'?'Phones, earbuds, chargers and watches. Pricey stock, big margins.':'Medicines and first-aid. Steady small sales, busy at night.'}</div>
+  <div class="row"><span class="grow">Rent + fit-out</span><b class="amt">${fmt(def.rent)}</b></div><div class="row"><span class="grow">Your cash</span><span class="amt">${fmt(ST.cash)}</span></div>
+  <div class="muted">Name your shop</div><input class="txt" id="rn" maxlength="22" value="${def.defName}" autocomplete="off">
+  ${ST.cash<def.rent?'<div class="bad">Not enough cash. Withdraw savings from the bank or earn more at your stall.</div>':''}
+  <div class="row"><button class="btn" id="rb" ${ST.cash<def.rent?'disabled':''}>Rent and build</button><button class="btn ghost" id="rx">Not now</button></div>`;
+  $('#rx').onclick=closeModal;
+  $('#rb').onclick=()=>{b.name=($('#rn').value||def.defName).trim().slice(0,22)||def.defName;ST.cash-=def.rent;b.built=true;closeModal();buildBranch(def,true);refreshHud();toast(b.name+' is ready. Order stock, then hire staff.');setTimeout(()=>openBranch(key,'stock'),1800);save()};
+}
+function openBranch(key,tab){
+  const def=BDEF[key],b=XS.branches[key],B=BR[key];if(!B)return;tab=tab||'stock';const el=$('#modalBody');openModal();
+  const render=()=>{let body='';
+    if(tab==='stock'){
+      body=def.items.map(it=>{const cost=Math.round(it.ws*it.lot),p=b.price[it.id],st=stepOf(it);
+        return `<div class="row" style="flex-wrap:wrap;row-gap:0"><span class="sw" style="background:${it.color}"></span><div class="grow" style="min-width:120px">${it.name}</div><span class="muted amt" style="min-width:52px">stock ${b.stock[it.id]}</span>
+        <div class="qty"><button data-pm="${it.id}" aria-label="Lower price">−</button><b style="font-size:15px;min-width:62px" class="${p<=it.ws?'bad':''}">${fmt(p)}</b><button data-pp="${it.id}" aria-label="Raise price">+</button></div>
+        <button class="btn ghost" data-b="${it.id}" ${ST.cash<cost||b.stock[it.id]>=40?'disabled':''}>+${it.lot} · ${fmt(cost)}</button>
+        ${it.id==='e_smart'&&b.stock[it.id]>0&&XS.phone!=='smart'?`<button class="btn ghost" data-keep="1">Keep one for me</button>`:''}</div>`}).join('')+
+        `<div class="muted" style="line-height:18px">Red price means you sell below what you paid. Staff serve waiting customers for you.</div>`;
+    }else if(tab==='staff'){
+      body=`<div class="row"><span class="grow">Staff on the floor</span><b class="amt">${b.staff} / 8</b></div><div class="row"><span class="grow">Wage per day each</span><b class="amt">${fmt(def.wage)}</b></div>
+      <div class="muted" style="line-height:18px">Each person serves waiting customers by themselves and makes the shop more attractive. Wages are paid at midnight; if you cannot pay, staff leave.</div>
+      <div class="row"><button class="btn" id="hire" ${b.staff>=8||ST.cash<def.staffCost?'disabled':''}>Hire · ${fmt(def.staffCost)}</button><button class="btn ghost" id="fire" ${b.staff<=0?'disabled':''}>Let one go</button></div>`;
+    }else{
+      body=`<div class="row"><span class="grow">Rating</span><b>★ ${b.rep.toFixed(1)}</b></div><div class="row"><span class="grow">Today's sales</span><b class="amt">${fmt(b.today)}</b></div><div class="row"><span class="grow">All-time sales</span><b class="amt">${fmt(b.total)}</b></div><div class="row"><span class="grow">Customers served</span><b class="amt">${b.sold}</b></div>
+      <div class="row"><span class="grow">Daily wages</span><b class="amt">${fmt(b.staff*def.wage)}</b></div>`;
+    }
+    el.innerHTML=`<div class="row"><h2 class="grow">${b.name}</h2><b class="amt">${fmt(ST.cash)}</b></div><div class="tabs"><button data-t="stock" class="${tab==='stock'?'on':''}">Stock & prices</button><button data-t="staff" class="${tab==='staff'?'on':''}">Staff</button><button data-t="st" class="${tab==='st'?'on':''}">Numbers</button></div>${body}<div class="row"><button class="btn ghost" id="sx">Close</button></div>`;
+    el.querySelectorAll('[data-t]').forEach(x=>x.onclick=()=>{tab=x.dataset.t;render()});$('#sx').onclick=()=>{closeModal();save()};
+    el.querySelectorAll('[data-pm]').forEach(x=>x.onclick=()=>{const it=BITEM[x.dataset.pm];b.price[it.id]=Math.max(1,b.price[it.id]-stepOf(it));render()});
+    el.querySelectorAll('[data-pp]').forEach(x=>x.onclick=()=>{const it=BITEM[x.dataset.pp];b.price[it.id]=Math.min(it.price*3,b.price[it.id]+stepOf(it));render()});
+    el.querySelectorAll('[data-b]').forEach(x=>x.onclick=()=>{const it=BITEM[x.dataset.b],c=Math.round(it.ws*it.lot);if(ST.cash>=c){ST.cash-=c;b.stock[it.id]=Math.min(40,b.stock[it.id]+it.lot);SFX.coin();B.viz();refreshHud();render()}});
+    el.querySelectorAll('[data-keep]').forEach(x=>x.onclick=()=>{b.stock.e_smart--;XS.phone='smart';SFX.ding();toast('You now carry a smartphone. New phone apps unlocked.');B.viz();render()});
+    const h=$('#hire');if(h)h.onclick=()=>{if(ST.cash>=def.staffCost&&b.staff<8){ST.cash-=def.staffCost;b.staff++;B.syncStaff();SFX.ding();refreshHud();render()}};
+    const f=$('#fire');if(f)f.onclick=()=>{if(b.staff>0){b.staff--;B.syncStaff();render()}};
+  };render();
+}
+
+// ---------- hooks ----------
+function dayExt(){
+  let wages=0;for(const k in BDEF){const b=XS.branches[k];if(b.built)wages+=b.staff*BDEF[k].wage}wages+=XS.kStaff*100;
+  if(wages>0){
+    while(wages>ST.cash+XS.bank){let cut=false;for(const k in BDEF){const b=XS.branches[k];if(b.staff>0){b.staff--;wages-=BDEF[k].wage;cut=true;if(BR[k])BR[k].syncStaff();break}}if(!cut&&XS.kStaff>0){XS.kStaff--;wages-=100;cut=true}if(!cut)break;toast('A staff member quit: wages could not be paid.')}
+    const fromCash=Math.min(ST.cash,wages);ST.cash-=fromCash;XS.bank-=wages-fromCash;if(XS.bank<0)XS.bank=0;toast('Wages paid: '+fmt(wages));
+  }
+  if(XS.bank>0){const i=Math.floor(XS.bank*.02);XS.bank+=i}
+  if(XS.loan>0)XS.loan+=Math.ceil(XS.loan*.04);
+  for(const k in BDEF){const b=XS.branches[k];if(b.built&&b.today>0)toast(b.name+' earned '+fmt(b.today)+' today');b.today=0}
+  XS.lunch=0;
+}
+EXT.day=dayExt;
+EXT.roots=(prev=>()=>{const a=prev();for(const k in PLOT2)if(PLOT2[k].visible)a.push(PLOT2[k].userData.board);for(const k in BR)a.push(BR[k].g);NPCROOTS.forEach(o=>a.push(o));bcusts.forEach(c=>a.push(c.P.g));return a})(EXT.roots);
+EXT.hover=(prev=>p=>{if(!p)return null;
+  if(p.kind==='plot2')return 'Shop to let: '+BDEF[p.key].label.toLowerCase()+' · rent '+fmt(BDEF[p.key].rent);
+  if(p.kind==='branch')return XS.branches[p.key].name+' · click to manage';
+  if(p.kind==='bcust')return p.c.state==='wait'&&!XS.branches[p.c.key].staff?'Customer waiting · click to serve':'Customer';
+  if(p.kind==='npc')return p.name;return prev(p)})(EXT.hover);
+EXT.click=(prev=>p=>{
+  if(p.kind==='plot2'){openRent(p.key);return true}
+  if(p.kind==='branch'){openBranch(p.key);return true}
+  if(p.kind==='bcust'){bServe(p.c);return true}
+  if(p.kind==='npc'){const v=TOWN.find(s=>s.v.g.userData.pick===p);if(v){setPose(v.v,'greet');setTimeout(()=>setPose(v.v,'hold'),1500);bubble(v.v.head,pick(p.lines),{ttl:2.6,off:.3})}return true}
+  return prev(p)})(EXT.click);
+EXT.update=(prev=>(sd,t,dt)=>{prev(sd,t,dt);
+  updateTownAll(sd,dt,t);
+  for(const k in BR){const B=BR[k];B.update(t,dt);
+    if(sd>0){if(B.bt!==undefined){B.bt+=sd;const q=Math.min(1,B.bt/1.4);B.g.scale.y=Math.max(.01,(1-Math.pow(1-q,3))*(1+Math.sin(q*Math.PI)*.04));if(q>=1){B.g.scale.y=1;delete B.bt}}
+      B.signMat.emissiveIntensity=lerp(0,.9,NIGHT);
+      bSpawn[k]-=sd;if(bSpawn[k]<=0){bSpawn[k]=rnd(5,10)/(.25+trafficRate(hourOf()));if(bcusts.length<14)spawnBranchCust(k)}}}
+  if(sd>0){bcusts.forEach(c=>updateBCust(c,sd));for(let i=bcusts.length-1;i>=0;i--)if(bcusts[i].dead){scene.remove(bcusts[i].P.g);bcusts.splice(i,1)}}
+})(EXT.update);
+EXT.afterLoad=(prev=>()=>{prev();binit();for(const k in BDEF)if(XS.branches[k].built&&!BR[k])buildBranch(BDEF[k],false)})(EXT.afterLoad);
+// ---------- vehicles you can drive ----------
+const VEH={
+  scooter:{name:'Scooter',max:15,acc:10,mk:makeBike,x:3.4,z:5.0},
+  auto:{name:'Auto-rickshaw',max:10,acc:6,mk:makeAuto,x:-3.8,z:5.3},
+  car:{name:'Car',max:18,acc:8,mk:makeCar,x:9.0,z:5.5}};
+const PARK={},DR={veh:null,v:0,r:0,snd:0,bump:0};
+function riderParts(g){return g.userData.rider||(g.userData.rider=g.children.slice(-3))}
+for(const k in VEH){const V=VEH[k],g=V.mk();g.position.set(V.x,0,V.z);scene.add(g);g.userData.pick={kind:'veh',id:k};g.traverse(m=>{if(m.isMesh){m.castShadow=true}});
+  if(k==='scooter')riderParts(g).forEach(c=>c.visible=false);PARK[k]={g,id:k}}
+function mergeXS(e){if(!e)return;['bank','loan','phone','kStaff','lunch','nav'].forEach(k=>{if(e[k]!==undefined)XS[k]=e[k]});
+  for(const k in XS.branches){const s=e.branches&&e.branches[k];if(s)Object.assign(XS.branches[k],s)}binit()}
+function startDrive(id){
+  if(mode!=='walk'){toast('Step out from behind the counter first.');return}
+  const P=PARK[id];DR.veh=P;DR.v=0;DR.r=P.g.rotation.y;mode='drive';
+  if(id==='scooter')riderParts(P.g).forEach(c=>c.visible=true);
+  $('#bExit').hidden=false;$('#hint').textContent='W / S speed · A / D steer · H horn';SFX.engine();
+}
+function exitDrive(){
+  if(mode!=='drive')return;const P=DR.veh;mode='walk';DR.veh=null;
+  if(P.id==='scooter')riderParts(P.g).forEach(c=>c.visible=false);
+  cam.x=P.g.position.x;cam.z=3.6;cam.y=1.62+G;cam.yaw=0;cam.pitch=-.03;$('#bExit').hidden=true;$('#bEnter').hidden=true;$('#hint').textContent='Drag to look · W A S D to walk · click a jar, packet or person';
+}
+addEventListener('keydown',e=>{if(e.code==='KeyH'&&mode==='drive')SFX.honk()});
+EXT.followCam=dt=>{
+  const P=DR.veh;if(!P)return;const r=DR.r,k=Math.min(1,dt*6);
+  const tx=P.g.position.x-Math.cos(r)*6.5,tz=P.g.position.z+Math.sin(r)*6.5;
+  cam.x+=(tx-cam.x)*k;cam.z+=(tz-cam.z)*k;cam.y=2.9;cam.pitch=-.2;
+  let d=(r-Math.PI/2)-cam.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));cam.yaw+=d*k;
+};
+function driveStep(sd){
+  const P=DR.veh,V=VEH[P.id];let acc=0;
+  if(keys.KeyW||keys.ArrowUp)acc+=1;if(keys.KeyS||keys.ArrowDown)acc-=1;acc-=joy.y;acc=clamp(acc,-1,1);
+  const steer=clamp((keys.KeyA||keys.ArrowLeft?1:0)-(keys.KeyD||keys.ArrowRight?1:0)-joy.x,-1,1);
+  DR.v+=acc*V.acc*sd;if(Math.abs(acc)<.05)DR.v-=Math.sign(DR.v)*Math.min(Math.abs(DR.v),4*sd);
+  DR.v=clamp(DR.v,-V.max*.35,V.max);
+  DR.r+=steer*sd*1.7*clamp(Math.abs(DR.v)/5,0,1)*(DR.v<0?-1:1);
+  const p=P.g.position;p.x+=Math.cos(DR.r)*DR.v*sd;p.z+=-Math.sin(DR.r)*DR.v*sd;
+  if(p.z<4.9){p.z=4.9;DR.v*=.7}if(p.z>10.9){p.z=10.9;DR.v*=.7}p.x=clamp(p.x,-118,118);
+  P.g.rotation.y=DR.r;
+  DR.bump-=sd;if(DR.bump<=0)for(const t of vehs){if(Math.hypot(t.g.position.x-p.x,t.g.position.z-p.z)<2.3){DR.v*=.4;DR.bump=1;toast('Watch out for traffic!');SFX.honk();break}}
+  DR.snd-=sd;if(DR.snd<=0&&Math.abs(DR.v)>.5){DR.snd=.3;tone(55+Math.abs(DR.v)*6,.28,'sawtooth',.018)}
+}
+// ---------- bank ----------
+function openBank(){
+  const el=$('#modalBody');openModal();
+  const render=()=>{const lim=5000-XS.loan;
+    el.innerHTML=`<h2>Bharat Savings Bank</h2>
+    <div class="row"><span class="grow">Cash in hand</span><b class="amt">${fmt(ST.cash)}</b></div><div class="row"><span class="grow">Savings (2% interest a day)</span><b class="amt good">${fmt(XS.bank)}</b></div>
+    <div class="row"><span class="grow">Loan (4% a day)</span><b class="amt ${XS.loan?'bad':''}">${fmt(XS.loan)}</b></div>
+    <div class="muted">Deposit</div><div class="row" style="flex-wrap:wrap">${[100,500,1000].map(a=>`<button class="btn ghost" data-dep="${a}" ${ST.cash<a?'disabled':''}>${fmt(a)}</button>`).join('')}<button class="btn ghost" data-dep="all" ${ST.cash<1?'disabled':''}>All cash</button></div>
+    <div class="muted">Withdraw</div><div class="row" style="flex-wrap:wrap">${[100,500,1000].map(a=>`<button class="btn ghost" data-wd="${a}" ${XS.bank<a?'disabled':''}>${fmt(a)}</button>`).join('')}<button class="btn ghost" data-wd="all" ${XS.bank<1?'disabled':''}>All savings</button></div>
+    <div class="muted">Loan (up to ${fmt(5000)})</div><div class="row" style="flex-wrap:wrap">${[1000,3000].map(a=>`<button class="btn ghost" data-ln="${a}" ${lim<a?'disabled':''}>Borrow ${fmt(a)}</button>`).join('')}<button class="btn ghost" data-rp="1" ${!XS.loan||ST.cash<1?'disabled':''}>Repay ${fmt(Math.min(XS.loan,ST.cash))}</button></div>
+    <div class="row"><button class="btn ghost" id="bk">Close</button></div>`;
+    el.querySelectorAll('[data-dep]').forEach(b=>b.onclick=()=>{const a=b.dataset.dep==='all'?ST.cash:+b.dataset.dep;if(ST.cash>=a&&a>0){ST.cash-=a;XS.bank+=a;SFX.coin();refreshHud();render()}});
+    el.querySelectorAll('[data-wd]').forEach(b=>b.onclick=()=>{const a=b.dataset.wd==='all'?XS.bank:+b.dataset.wd;if(XS.bank>=a&&a>0){XS.bank-=a;ST.cash+=a;SFX.coin();refreshHud();render()}});
+    el.querySelectorAll('[data-ln]').forEach(b=>b.onclick=()=>{const a=+b.dataset.ln;if(5000-XS.loan>=a){XS.loan+=a;ST.cash+=a;SFX.ding();refreshHud();render()}});
+    el.querySelectorAll('[data-rp]').forEach(b=>b.onclick=()=>{const a=Math.min(XS.loan,ST.cash);if(a>0){XS.loan-=a;ST.cash-=a;SFX.coin();refreshHud();render()}});
+    $('#bk').onclick=()=>{closeModal();save()}};
+  render();
+}
+// ---------- restaurant ----------
+const MENU=[{n:'Full Thali',p:120},{n:'Chicken Biryani',p:180},{n:'Masala Dosa',p:70},{n:'Chai & Samosa',p:30},{n:'Sweet Lassi',p:40}];
+function staffTotal(){let n=XS.kStaff;for(const k in XS.branches)if(XS.branches[k].built)n+=XS.branches[k].staff;return n}
+function openRestaurant(){
+  const el=$('#modalBody');openModal();
+  const render=()=>{const st=staffTotal();
+    el.innerHTML=`<h2>Spice Garden</h2><div class="row"><span class="grow muted">Your cash</span><b class="amt">${fmt(ST.cash)}</b></div>`+
+    MENU.map((m,i)=>`<div class="row"><span class="grow">${m.n}</span><span class="amt">${fmt(m.p)}</span><button class="btn ghost" data-m="${i}" ${ST.cash<m.p?'disabled':''}>Eat</button></div>`).join('')+
+    `<div class="row"><span class="grow">Treat all ${st} staff to lunch<div class="muted" style="line-height:16px">Staff work faster for the rest of the day.</div></span><button class="btn ghost" id="lun" ${!st||XS.lunch||ST.cash<st*100?'disabled':''}>${XS.lunch?'Done':fmt(st*100)}</button></div>
+    <div class="row"><button class="btn ghost" id="rx2">Close</button></div>`;
+    el.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{const m=MENU[+b.dataset.m];if(ST.cash>=m.p){ST.cash-=m.p;ST.yums++;SFX.crunch();toast('Delicious: '+m.n);refreshHud();render()}});
+    const l=$('#lun');if(l)l.onclick=()=>{const c=staffTotal()*100;if(ST.cash>=c&&!XS.lunch){ST.cash-=c;XS.lunch=1;SFX.ding();toast('Your staff are happy and working faster.');refreshHud();render()}};
+    $('#rx2').onclick=closeModal};
+  render();
+}
+// ---------- phone ----------
+const smart=()=>XS.phone==='smart';
+const FOOD=MENU.map(m=>({n:m.n,p:Math.round(m.p*1.3)}));
+function openPhone(app){
+  openModal();const el=$('#modalBody');el.classList.add('phone');
+  const hdr=(t)=>`<div class="row"><b class="grow" style="font-family:var(--f-display);font-size:20px">${t}</b><span class="muted" style="color:#9fb0d0">${clock()}</span></div>`;
+  const back=`<div class="row"><button class="btn ghost phb" id="pbk">Home</button><button class="btn ghost phb" id="pcl">Close</button></div>`;
+  const wire=()=>{const b=$('#pbk');if(b)b.onclick=()=>show('home');$('#pcl').onclick=closeModal};
+  const near=x=>Math.abs(x-(mode==='drive'&&DR.veh?DR.veh.g.position.x:cam.x));
+  const show=a=>{
+    if(a==='home'){
+      el.innerHTML=hdr(smart()?'Smartphone':'Basic phone')+`<div class="apps">
+       <button class="app" data-a="bank">Bank</button><button class="app" data-a="maps">Maps</button>
+       <button class="app" data-a="notes">Today</button>
+       <button class="app ${smart()?'':'lock'}" data-a="stores">Stores${smart()?'':'<small>smartphone</small>'}</button>
+       <button class="app ${smart()?'':'lock'}" data-a="food">Food${smart()?'':'<small>smartphone</small>'}</button></div>
+       ${smart()?'':'<div class="muted" style="color:#9fb0d0;line-height:18px">Buy a smartphone from an electronics showroom to unlock Stores and Food.</div>'}<div class="row"><button class="btn ghost phb" id="pcl">Close</button></div>`;
+      el.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{if(b.classList.contains('lock')){toast('Needs a smartphone from the electronics showroom.');SFX.no();return}show(b.dataset.a)});$('#pcl').onclick=closeModal;return;
+    }
+    if(a==='bank'){el.innerHTML=hdr('Bank')+`<div class="row"><span class="grow">Savings</span><b class="amt">${fmt(XS.bank)}</b></div><div class="row"><span class="grow">Loan due</span><b class="amt">${fmt(XS.loan)}</b></div><div class="row"><span class="grow">Cash in hand</span><b class="amt">${fmt(ST.cash)}</b></div><div class="muted" style="color:#9fb0d0;line-height:18px">Deposits and withdrawals are done in person at Bharat Savings Bank, far down the street. Savings earn 2% each day.</div>`+back;wire();return}
+    if(a==='maps'){const ks=['bank','rest','home','elec','med'];
+      el.innerHTML=hdr('Maps')+ks.map(k=>`<div class="row"><span class="grow">${DEST[k].name}</span><span class="muted" style="color:#9fb0d0">${Math.round(near(DEST[k].x))} m</span><button class="btn ghost phb" data-g="${k}">Go</button></div>`).join('')+`<div class="row"><button class="btn ghost phb" id="clr">Clear route</button></div>`+back;
+      el.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{XS.nav=b.dataset.g;toast('Route set: '+DEST[XS.nav].name);closeModal()});$('#clr').onclick=()=>{XS.nav=null;toast('Route cleared')};wire();return}
+    if(a==='notes'){const br=['elec','med'].filter(k=>XS.branches[k].built);
+      el.innerHTML=hdr('Today')+`<div class="row"><span class="grow">Stall sales</span><b class="amt">${fmt(ST.today.me)}</b></div>`+br.map(k=>`<div class="row"><span class="grow">${XS.branches[k].name}</span><b class="amt">${fmt(XS.branches[k].today)}</b></div>`).join('')+`<div class="row"><span class="grow">Sharma ji</span><b class="amt">${fmt(ST.today.rival)}</b></div><div class="row"><span class="grow">Staff on payroll</span><b class="amt">${staffTotal()}</b></div>`+back;wire();return}
+    if(a==='stores'){
+      const lines=[];let cost=0;
+      if(ST.built)ITEMS.forEach(it=>{if(unlocked(it)&&ST.stock[it.id]<10){const q=10-ST.stock[it.id],c=Math.round(it.ws*q);lines.push({k:'k',id:it.id,q,c,n:it.name});cost+=c}});
+      ['elec','med'].forEach(k=>{if(XS.branches[k].built)BDEF[k].items.forEach(it=>{const b=XS.branches[k];if(b.stock[it.id]<it.lot){const q=it.lot*2-b.stock[it.id],q2=Math.ceil(q/it.lot)*it.lot,c=Math.round(it.ws*q2);lines.push({k,id:it.id,q:q2,c,n:b.name+': '+it.name});cost+=c}})});
+      const fee=Math.round(cost*.1);
+      el.innerHTML=hdr('Stores')+(lines.length?lines.slice(0,12).map(l=>`<div class="row"><span class="grow">${l.n} ×${l.q}</span><span class="amt">${fmt(l.c)}</span></div>`).join('')+(lines.length>12?`<div class="muted" style="color:#9fb0d0">and ${lines.length-12} more</div>`:'')+`<div class="row"><b class="grow">Total + 10% delivery</b><b class="amt">${fmt(cost+fee)}</b></div><div class="row"><button class="btn" id="ord" ${ST.cash<cost+fee?'disabled':''}>Order everything</button></div>`:'<div class="muted" style="color:#9fb0d0">All your shelves are stocked.</div>')+back;
+      const o=$('#ord');if(o)o.onclick=()=>{if(ST.cash<cost+fee)return;ST.cash-=cost+fee;lines.forEach(l=>{if(l.k==='k')ST.stock[l.id]=Math.min(60,ST.stock[l.id]+l.q);else XS.branches[l.k].stock[l.id]=Math.min(40,XS.branches[l.k].stock[l.id]+l.q)});applyShop();for(const k in BR)BR[k].viz();SFX.ding();toast('Delivered to your shops');refreshHud();show('stores')};
+      wire();return}
+    if(a==='food'){el.innerHTML=hdr('Food delivery')+FOOD.map((m,i)=>`<div class="row"><span class="grow">${m.n}</span><span class="amt">${fmt(m.p)}</span><button class="btn ghost phb" data-f="${i}" ${ST.cash<m.p?'disabled':''}>Order</button></div>`).join('')+`<div class="muted" style="color:#9fb0d0">Includes delivery. No need to drive.</div>`+back;
+      el.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{const m=FOOD[+b.dataset.f];if(ST.cash>=m.p){ST.cash-=m.p;ST.yums++;SFX.crunch();toast('Ate: '+m.n);refreshHud();show('food')}});wire();return}
+  };show(app||'home');
+}
+// ---------- kirana staff ----------
+function syncKStaff(){
+  if(!me)return;me.kst=me.kst||[];const n=Math.min(XS.kStaff,3),pos=[[-1.3,-1.45],[2.0,-1.35],[-2.0,-1.0]];
+  while(me.kst.length<n){const sp=pos[me.kst.length],p=makePerson({skin:pick(SKIN),top:pick([0x2e9b57,0xc3352b,0x1f6fd0]),bottom:0x2b3a55,hair:0x15100c,scale:.96});p.g.position.set(sp[0],G,sp[1]);me.g.add(p.g);setPose(p,'hold');me.kst.push(p)}
+  me.kst.forEach((p,i)=>p.g.visible=i<n);
+}
+// ---------- hooks & hud ----------
+EXT.roots=(prev=>()=>{const a=prev();for(const k in PARK)if(!DR.veh||DR.veh!==PARK[k])a.push(PARK[k].g);return a})(EXT.roots);
+EXT.hover=(prev=>p=>{if(p&&p.kind==='veh')return VEH[p.id].name+' · click to drive';return prev(p)})(EXT.hover);
+EXT.click=(prev=>p=>{if(p.kind==='veh'){const V=VEH[p.id];openModal();$('#modalBody').innerHTML=`<h2>${V.name}</h2><div class="muted">Drive it down the road to the bank or the restaurant. Traffic is real, so go easy. Your shops keep running while you are away.</div><div class="row"><button class="btn" id="dv">Get in and drive</button><button class="btn ghost" id="dn">Not now</button></div>`;$('#dn').onclick=closeModal;$('#dv').onclick=()=>{closeModal();startDrive(p.id)};return true}return prev(p)})(EXT.click);
+let hudT=0;
+EXT.update=(prev=>(sd,t,dt)=>{prev(sd,t,dt);
+  if(sd>0&&mode==='drive'&&DR.veh)driveStep(sd);
+  if(me){syncKStaff();(me.kst||[]).forEach(p=>updatePerson(p,dt,t,0))}
+  hudT-=dt;if(hudT<=0){hudT=.3;
+    const px=mode==='drive'&&DR.veh?DR.veh.g.position.x:camera.position.x,nav=$('#nav');
+    if(XS.nav&&DEST[XS.nav]){const d=DEST[XS.nav].x-px;nav.hidden=false;nav.innerHTML='<span class="lab">'+DEST[XS.nav].name+'</span><b>'+(Math.abs(d)<8?'Arrived':Math.round(Math.abs(d))+' m '+(d>0?'→':'←'))+'</b>'}else nav.hidden=true;
+    const nb=Math.abs(px-DEST.bank.x)<14,nr=Math.abs(px-DEST.rest.x)<14,en=$('#bEnter');
+    en.hidden=!(nb||nr);if(nb)en.textContent='Enter the bank';else if(nr)en.textContent='Enter the restaurant';en.dataset.k=nb?'bank':'rest';
+    $('#vPhoneLab').textContent=smart()?'Smartphone':'Phone'}
+})(EXT.update);
+EXT.afterLoad=(prev=>()=>{prev();})(EXT.afterLoad);
+$('#bPhone').onclick=()=>{if(!paused)openPhone('home')};
+$('#bExit').onclick=exitDrive;
+$('#bEnter').onclick=()=>{if(paused)return;$('#bEnter').dataset.k==='bank'?openBank():openRestaurant()};
 // ---------- main loop ----------
 let last=performance.now(),clk=0,birdT=3,autoSave=0,skyT=0;
 const DAYSEC=420;
@@ -1073,6 +1521,7 @@ function frame(now){
     for(let i=dustPuffs.length-1;i>=0;i--){const d=dustPuffs[i],u=d.userData;u.life-=sd;d.position.addScaledVector(u.v,sd);d.scale.multiplyScalar(1+sd*.9);d.material.opacity=Math.max(0,u.life/1.6*.5);if(u.life<=0){scene.remove(d);dustPuffs.splice(i,1)}}
     if(me&&me.bt!==undefined){me.bt+=sd;const k=Math.min(1,me.bt/1.4),e=1-Math.pow(1-k,3);me.g.scale.y=Math.max(.01,e*(1+Math.sin(k*Math.PI)*.04));if(k>=1){me.g.scale.y=1;delete me.bt}}
   }
+  EXT.update(sd,t,dt);
   // sky & lights
   skyT-=dt;if(skyT<=0){skyT=.15;applyTime(hourOf());
     NIGHTM.forEach(n=>{n.mat.emissiveIntensity=lerp(n.dayI,n.nightI,NIGHT)});
@@ -1111,15 +1560,16 @@ $('#bCounter').onclick=()=>{
   else{mode='walk';cam.x=me.cx;cam.z=3.2;cam.yaw=0;cam.pitch=-.03;me.keeper.g.visible=true;$('#bCounter').textContent='Go behind my counter'}
 };
 function begin(cont){
-  audioInit();if(cont&&load()){if(ST.built)makeShop(false)}
+  audioInit();if(cont&&load()){if(ST.built)makeShop(false)}EXT.afterLoad();
   started=true;$('#start').hidden=true;$('#hud').hidden=false;refreshHud();setSound(AU.on);
   toast('Walk up to Sharma ji and click a jar.');setTimeout(()=>toast('The empty plot on the right is for rent.'),4500);
   for(let i=0;i<6;i++){spawnCust();custs[custs.length-1].P.g.position.x=rnd(-14,14)}
+  for(let i=0;i<6;i++){const n=tfolk.length;spawnTown();if(tfolk.length>n)tfolk[tfolk.length-1].P.g.position.x=rnd(-30,30)}
 }
 $('#bGo').onclick=()=>begin(false);
 {const s=peek();if(s&&typeof s.cash==='number'){$('#bCont').hidden=false;$('#bCont').textContent=`Continue · Day ${s.day} · ${fmt(s.cash)}`;$('#bCont').onclick=()=>begin(true)}}
 resize();makeEnv();applyTime(hourOf());
-window.__kirana={ST,rival,openBuild,openShop,spawnCust,get me(){return me},cam,custs,openItem,serve,shout,begin};
+window.__kirana={ST,XS,BR,DR,openRent,openBranch,openPhone,openBank,openRestaurant,startDrive,exitDrive,PARK,tfolk,bcusts,rival,openBuild,openShop,spawnCust,get me(){return me},cam,custs,openItem,serve,shout,begin};
 requestAnimationFrame(frame);
 })();
 </script>
