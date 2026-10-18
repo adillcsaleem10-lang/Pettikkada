@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Pettikkada</title>
+<title>Kirana Street</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Hind:wght@400;500;600&display=swap">
 <style>
@@ -91,6 +91,11 @@ input.txt{font:inherit;border:0;border-bottom:2px solid var(--ink);background:tr
 .apps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0}
 .app{border:0;border-radius:16px;background:#243253;color:#e8eefc;font-family:var(--f-display);font-weight:700;font-size:16px;padding:14px 4px;min-height:74px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
 .app.lock{opacity:.5}.app small{font-size:10px;font-weight:500;opacity:.85}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .8s;z-index:50}
+#cap{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(40px + env(safe-area-inset-bottom,0px));width:min(560px,calc(100% - 32px));background:rgba(10,8,6,.82);color:#fde9c4;border-radius:10px;padding:10px 16px;font-size:17px;text-align:center;z-index:45;pointer-events:none;line-height:1.35}
+#cap b{display:block;font-family:var(--f-display);font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.75}
+#bSkip{position:fixed;right:max(14px,env(safe-area-inset-right,0px));top:calc(14px + env(safe-area-inset-top,0px));z-index:46;padding:6px 14px;font-size:14px}
+.cine #hud,.cine #acts,.cine #score,.cine #nav,.cine #bill,.cine #itemPanel,.cine #hint,.cine #joy{display:none!important}
 @media (prefers-reduced-motion:reduce){.toast{animation:none}}
 </style>
 
@@ -123,6 +128,9 @@ input.txt{font:inherit;border:0;border-bottom:2px solid var(--ink);background:tr
 <aside id="bill" class="slip" hidden></aside>
 <div id="modal" hidden><div id="modalBody" class="slip"></div></div>
 <div id="toasts"></div>
+<div id="fade"></div>
+<div id="cap" hidden></div>
+<button class="btn" id="bSkip" hidden>Skip</button>
 <div id="start">
   <div class="slip">
     <h1>Kirana Street</h1>
@@ -871,8 +879,8 @@ function openBag(){
 }
 function openModal(){paused=true;$('#modal').hidden=false;$('#modalBody').classList.remove('phone')}
 function closeModal(){paused=false;$('#modal').hidden=true}
-function closeAll(){if(!$('#modal').hidden)closeModal();closeItem()}
-$('#modal').addEventListener('pointerdown',e=>{if(e.target.id==='modal')closeModal()});
+function closeAll(){if(typeof CINE!=='undefined'&&CINE.on)return;if(!$('#modal').hidden)closeModal();closeItem()}
+$('#modal').addEventListener('pointerdown',e=>{if(e.target.id==='modal'&&!(typeof CINE!=='undefined'&&CINE.on))closeModal()});
 // ---------- own shop ----------
 const UPS=[
  {id:'rack',name:'Hanging snack rack',cost:80,att:.2,desc:'Chips, sachets and mixtures can hang in front.'},
@@ -1401,7 +1409,8 @@ function driveStep(sd){
   const p=P.g.position;p.x+=Math.cos(DR.r)*DR.v*sd;p.z+=-Math.sin(DR.r)*DR.v*sd;
   if(p.z<4.9){p.z=4.9;DR.v*=.7}if(p.z>10.9){p.z=10.9;DR.v*=.7}p.x=clamp(p.x,-118,118);
   P.g.rotation.y=DR.r;
-  DR.bump-=sd;if(DR.bump<=0)for(const t of vehs){if(Math.hypot(t.g.position.x-p.x,t.g.position.z-p.z)<2.3){DR.v*=.4;DR.bump=1;toast('Watch out for traffic!');SFX.honk();break}}
+  DR.bump-=sd;if(DR.bump<=0)for(const t of vehs){if(Math.hypot(t.g.position.x-p.x,t.g.position.z-p.z)<2.3){const sp=Math.abs(DR.v);if(sp>7){crash(sp);return}DR.v*=.4;DR.bump=1;toast('Watch out for traffic!');SFX.honk();break}}
+  if(cow&&Math.hypot(cow.g.position.x-p.x,cow.g.position.z-p.z)<2.2){const sp=Math.abs(DR.v);if(sp>7){crash(sp);return}DR.v*=.5}
   DR.snd-=sd;if(DR.snd<=0&&Math.abs(DR.v)>.5){DR.snd=.3;tone(55+Math.abs(DR.v)*6,.28,'sawtooth',.018)}
 }
 // ---------- bank ----------
@@ -1499,6 +1508,181 @@ EXT.afterLoad=(prev=>()=>{prev();})(EXT.afterLoad);
 $('#bPhone').onclick=()=>{if(!paused)openPhone('home')};
 $('#bExit').onclick=exitDrive;
 $('#bEnter').onclick=()=>{if(paused)return;$('#bEnter').dataset.k==='bank'?openBank():openRestaurant()};
+// ===================== CRASH -> HOSPITAL STORY =====================
+const HX=0,HZ=-150,HG=new THREE.Group();HG.visible=false;scene.add(HG);
+const hospLight=new THREE.PointLight(0xffffff,0,20,2);scene.add(hospLight);
+const hospAmb=new THREE.AmbientLight(0xffffff,0);scene.add(hospAmb);
+const HM=(c,o)=>M(c,Object.assign({fog:false,roughness:.6},o||{}));
+const hb=(w,h,d,m,x,y,z,par)=>box(w,h,d,m,x,y,z,par||HG,false,false);
+const FLOOR=HM(0xc3ced2),WALL=HM(0xf2f5f5),CEIL=HM(0xeceeee),PANEL=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:1.5,fog:false});
+const BEDM=HM(0xf4f4f4),LINEN=HM(0xcfe6f5),METAL=HM(0xb9c0c6,{metalness:.6,roughness:.35});
+let ecgCv=null,ecgTex=null,ecgMats=[];
+function mkEcg(){ecgCv=cv(256,128);ecgTex=new THREE.CanvasTexture(ecgCv);ecgTex.encoding=THREE.sRGBEncoding}
+mkEcg();
+function monitor(x,z,rot){const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot||0;HG.add(g);
+  cyl(.04,.05,1.3,METAL,0,.65,0,g,8);cyl(.25,.25,.04,METAL,0,.02,0,g,12);
+  box(.7,.5,.1,HM(0x1a1f25),0,1.5,0,g,false,false);
+  const sm=new THREE.MeshBasicMaterial({map:ecgTex,fog:false});const s=new THREE.Mesh(new THREE.PlaneGeometry(.62,.42),sm);s.position.set(0,1.5,.055);g.add(s);ecgMats.push(sm);return g}
+function bedAt(x,z){const g=new THREE.Group();g.position.set(x,0,z);HG.add(g);
+  box(2.1,.3,1.0,METAL,0,.5,0,g,false,false);box(2.0,.16,.95,BEDM,0,.72,0,g,false,false);box(.5,.12,.6,HM(0xffffff),-.7,.86,0,g,false,false);box(1.3,.1,.98,LINEN,.45,.84,0,g,false,false);
+  box(.08,.8,1.1,HM(0x7a8f9a),-1.08,.9,0,g,false,false);box(.08,.6,1.1,HM(0x7a8f9a),1.08,.8,0,g,false,false);
+  [[-.9,.45],[-.9,-.45],[.9,.45],[.9,-.45]].forEach(p=>{const w=cyl(.08,.08,.05,HM(0x222222),p[0],.08,p[1],g,10);w.rotation.x=Math.PI/2});return g}
+function ivStand(x,z){const g=new THREE.Group();g.position.set(x,0,z);HG.add(g);cyl(.02,.02,2,METAL,0,1,0,g,6);cyl(.2,.22,.04,METAL,0,.02,0,g,10);box(.14,.25,.05,HM(0xcdeaff,{transparent:true,opacity:.8}),0,1.9,0,g,false,false)}
+function room(x0,x1,z0,z1,h,gapW,gapE){ // gapW/gapE: door gaps at z center
+  const w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2;
+  hb(w,.1,d,FLOOR,cx,-.05,cz);hb(w,.1,d,CEIL,cx,h,cz);
+  hb(w,h,.1,WALL,cx,h/2,z0);hb(w,h,.1,WALL,cx,h/2,z1);
+  const side=(x,gap)=>{if(!gap){hb(.1,h,d,WALL,x,h/2,cz)}else{const s=(d-2)/2;hb(.1,h,s,WALL,x,h/2,z0+s/2);hb(.1,h,s,WALL,x,h/2,z1-s/2)}};
+  side(x0,gapW);side(x1,gapE);
+  for(let i=0;i<Math.max(1,Math.floor(w/3));i++)hb(1.3,.05,.45,PANEL,x0+1.5+i*3,h-.04,cz);
+}
+const HV={built:false,P:{}};
+function maskDoc(coat){const P=makePerson({skin:pick(SKIN),top:coat||0xffffff,bottom:0xdfe8ee,hair:0x15100c,longSleeve:1,glasses:Math.random()<.5,scale:1.0});box(.13,.08,.04,M(0x8fd3f0),0,-.05,.115,P.head);box(.18,.09,.1,M(0xe8f4f8),0,.1,0,P.head);return P}
+function buildHospital(){
+  if(HV.built)return;HV.built=true;
+  room(-4,4,HZ-3.6,HZ+3.6,3,false,true);bedAt(0,HZ);ivStand(-1.4,HZ+.9);monitor(-1.6,HZ-.9,Math.PI/2);
+  const win=new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.5),new THREE.MeshBasicMaterial({color:0xcfe8ff,fog:false}));win.position.set(-2,1.7,HZ+3.53);win.rotation.y=Math.PI;HG.add(win);HV.win=win;
+  hb(.9,.8,.6,HM(0x8c9aa3),2.5,.4,HZ-3.2);hb(.4,.5,.4,HM(0xb5532f),1.4,.25,HZ+1.4);
+  for(let i=0;i<5;i++)sph(.07,HM(pick([0xe74c3c,0xf1c40f,0xffffff,0xe84393])),1.25+i*.08,.62+(i%2)*.06,HZ+1.4,HG,6,4);
+  // corridor
+  hb(32,.1,3,FLOOR,20,-.05,HZ);hb(32,.1,3,CEIL,20,3,HZ);hb(32,3,.1,WALL,20,1.5,HZ-1.5);hb(32,3,.1,WALL,20,1.5,HZ+1.5);
+  for(let i=0;i<11;i++){hb(1.3,.05,.45,PANEL,5+i*3,2.96,HZ);hb(.1,2.1,1.0,HM(pick([0x4a90c2,0x5aa469,0xc9a24a])),5+i*3+1,1.05,HZ+1.44);}
+  hb(.1,.4,1.6,HM(0xc3352b),35.9,2.3,HZ);
+  // ICU
+  room(36,46,HZ-4,HZ+4,3.2,true,false);bedAt(41,HZ);monitor(40.2,HZ-1.4,Math.PI/2);monitor(42.2,HZ+1.4,-Math.PI/2);ivStand(40,HZ+1.0);
+  cyl(.5,.5,.06,PANEL,41,2.7,HZ,HG,16);cyl(.03,.03,.5,METAL,41,2.95,HZ,HG,6);
+  hb(.8,.9,.6,HM(0x2e6f95),43.6,.45,HZ-2.5);hb(.8,.9,.6,HM(0x4a7a5a),44.8,.45,HZ+2.5);hb(.1,1.2,3,HM(0xa8d5e2),45.9,1.5,HZ);
+  // people
+  const nurse=makePerson({skin:SKIN[3],top:0xf6a9c8,bottom:0xf6a9c8,saree:0xf6a9c8,hair:0x15100c,scale:.95});box(.2,.07,.16,M(0xffffff),0,.14,0,nurse.head);
+  const erdoc=maskDoc();erdoc.g.scale.setScalar(1.02);
+  const chhotu=makePerson({skin:SKIN[2],top:0x3c9d6a,bottom:0x2b3a55,hair:0x111111,scale:.8});
+  const docs=[0,1,2,3,4].map(()=>maskDoc());
+  HV.P={nurse,erdoc,chhotu,docs};
+  Object.values({nurse,erdoc,chhotu}).concat(docs).forEach(p=>{p.g.visible=false;HG.add(p.g)});
+}
+function makeAmb(){
+  const g=new THREE.Group(),w=HM(0xf8f8f8,{fog:true});
+  box(3.8,1.5,1.7,w,-.2,1.05,0,g);box(1.2,1.1,1.6,w,1.9,.85,0,g);box(3.8,.15,1.72,M(0xc3352b),-.2,.9,0,g);
+  box(.7,.2,.05,M(0xc3352b),-.4,1.6,.87,g);box(.2,.7,.05,M(0xc3352b),-.4,1.6,.87,g);
+  const l1=nightMat(M(0xff2222),0xff2222,1.5,1.5),l2=nightMat(M(0x2266ff),0x2266ff,1.5,1.5);
+  box(.25,.12,.5,l1,.4,1.9,.5,g,false);box(.25,.12,.5,l2,.4,1.9,-.5,g,false);g.userData.l1=l1;g.userData.l2=l2;
+  [[1.5,.8],[1.5,-.8],[-1.4,.8],[-1.4,-.8]].forEach(p=>wheel(.34,.22,p[0],.34,p[1],g));return g}
+// hospital building on the far side of the road
+(function hospitalExterior(){
+  const g=new THREE.Group();g.position.set(-53,0,0);scene.add(g);
+  box(18,7,5,M(0xf1f4f5,{map:T.plaster}),0,G+3.5,17.1,g);box(18.6,.4,5.6,M(0xcfd6d8),0,G+7.2,17.1,g);
+  box(5,3,.1,M(0x7fc4e8,{roughness:.2}),0,G+1.6,14.55,g);box(7,.4,2.2,M(0xc3352b),0,G+3.4,13.6,g);
+  const sm=nightMat(M(0xffffff),0xffffff,0,.9);sm.map=textTex(512,80,'#0d5c8a','#ffffff',['CITY HOSPITAL'],'bold {s}px sans-serif');sm.emissiveMap=sm.map;
+  box(9,1.1,.15,sm,0,G+6.3,14.5,g);const cr=nightMat(M(0xff3030),0xff3030,.7,2);box(1.2,.3,.1,cr,6,G+6.3,14.45,g,false);box(.3,1.2,.1,cr,6,G+6.3,14.45,g,false);
+  glowSprite(0,G+6.3,13.8,9,g,0xaad8ff).userData.max=.35;
+  const a=makeAmb();a.position.set(-5.5,0,11.4);g.add(a);
+})();
+
+// ---------- cinematic controller ----------
+const CINE={on:false,t:0,steps:[],i:0,tick:null,wait:false,flags:{},shake:0,amb:null,sirenT:0,bill:0,pid:null,hbT:0,beat:0};
+const fadeEl=$('#fade'),capEl=$('#cap');
+function fade(to,sec){fadeEl.style.transition='opacity '+(sec||.8)+'s';fadeEl.style.opacity=to}
+function cap(title,text){if(!title&&!text){capEl.hidden=true;return}capEl.hidden=false;capEl.innerHTML=(title?'<b>'+title+'</b>':'')+(text||'')}
+function sayH(P,t,ttl){bubble(P.head,t,{ttl:ttl||3.2,off:.35,max:60})}
+function look(p,hy,k){const dx=p.g.position.x-cam.x,dz=p.g.position.z-cam.z,dy=hy-cam.y,L=Math.hypot(dx,dz);
+  let ty=Math.atan2(-dx,-dz),d=ty-cam.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));cam.yaw+=d*k;cam.pitch+=(Math.atan2(dy,L)-cam.pitch)*k}
+function faceCam(P){P.g.rotation.y=Math.atan2(cam.x-P.g.position.x,cam.z-P.g.position.z)}
+function place(P,x,z,vis){P.g.position.set(x,0,z);P.g.visible=vis!==false;faceCam(P)}
+function crashSpeedBill(){return 1200+Math.round(Math.abs(CINE.pid||0)*40)}
+function sceneSet(on){HG.visible=on;hospLight.intensity=on?1.8:0;hospAmb.intensity=on?.55:0}
+function setCamBed(x,y,pitch,yaw){cam.x=x;cam.y=y;cam.z=HZ;cam.pitch=pitch;cam.yaw=yaw}
+function applyAway(){
+  if(CINE.flags.away)return;CINE.flags.away=true;
+  ST.min+=2*1440+4*60;let earn=0;
+  const k=(ST.up.helper?1:0)+XS.kStaff;if(ST.built)earn+=k*90;for(const key in XS.branches){const b=XS.branches[key];if(b.built){earn+=b.staff*110;b.today+=b.staff*110}}
+  earn*=2;ST.cash+=earn;CINE.earn=earn;
+  while(ST.min>=1440){ST.min-=1440;newDay()}refreshHud();
+}
+function finishCine(){
+  CINE.on=false;CINE.tick=null;sceneSet(false);document.body.classList.remove('cine');$('#bSkip').hidden=true;cap();
+  if(CINE.amb){scene.remove(CINE.amb);CINE.amb=null}
+  const P=DR.veh||PARK[CINE.vid||'car'];if(P){P.g.position.set(-52,0,10.2);P.g.rotation.set(0,0,0);DR.veh=P;DR.v=0;DR.r=0;if(P.id==='scooter')riderParts(P.g).forEach(c=>c.visible=true)}
+  mode='drive';paused=false;cam.x=-58;cam.z=10.2;XS.nav='home';$('#bExit').hidden=false;
+  fade(0,.9);toast('Your vehicle is repaired. Drive back to your store. Route set.');SFX.ding();
+}
+function billModal(){
+  CINE.wait=true;const base=crashSpeedBill(),lines=[['Emergency care',Math.round(base*.25)],['ICU stay and scans',Math.round(base*.4)],['Doctors’ consultations',Math.round(base*.2)],['Plaster cast and medicines',Math.round(base*.15)]];
+  const total=lines.reduce((a,l)=>a+l[1],0);openModal();paused=true;
+  const el=$('#modalBody');el.innerHTML=`<h2>City Hospital · Discharge bill</h2>`+lines.map(l=>`<div class="row"><span class="grow">${l[0]}</span><span class="amt">${fmt(l[1])}</span></div>`).join('')+`<div class="row" style="border-top:2px solid var(--ink)"><b class="grow">Total</b><b class="amt">${fmt(total)}</b></div><div class="muted" style="line-height:18px">Paid from your cash first, then your savings. Anything left becomes a bank loan.</div><div class="row"><button class="btn stamp" id="hpay">PAY AND GO HOME</button></div>`;
+  $('#hpay').onclick=()=>{let rest=total;const c=Math.min(ST.cash,rest);ST.cash-=c;rest-=c;const s=Math.min(XS.bank,rest);XS.bank-=s;rest-=s;if(rest>0)XS.loan+=rest;
+    $('#modal').hidden=true;paused=true;refreshHud();CINE.wait=false;CINE.t=CINE.billAt+.01;toast('Bill paid: '+fmt(total)+(rest>0?' (loan added: '+fmt(rest)+')':''));SFX.coin()}
+}
+function crash(v){
+  if(CINE.on||mode!=='drive'||!DR.veh)return;
+  CINE.on=true;CINE.t=0;CINE.i=0;CINE.flags={};CINE.wait=false;CINE.pid=Math.abs(v);CINE.vid=DR.veh.id;CINE.tick=null;buildHospital();
+  document.body.classList.add('cine');paused=true;mode='cine';$('#bExit').hidden=true;$('#bEnter').hidden=true;$('#bSkip').hidden=false;
+  const veh=DR.veh,vx=Math.cos(DR.r)*v*.5,vz=-Math.sin(DR.r)*v*.5;let spin=0,tt=0;
+  fade(.0,.1);fadeEl.style.background='#b3000f';fadeEl.style.opacity=.7;setTimeout(()=>{fadeEl.style.transition='opacity .5s';fadeEl.style.opacity=0},120);setTimeout(()=>fadeEl.style.background='#000',700);
+  burst(.5,200,1,.5,'lowpass');burst(.25,3000,.8,.4,'highpass');tone(80,.6,'sawtooth',.2,0,.4);CINE.shake=1;
+  cap('CRASH!','You hit the traffic at speed.');
+  const site=veh.g.position.clone();const sx=site.x;
+  CINE.tick=dt=>{tt+=dt;spin=Math.max(0,1-tt/1.2);veh.g.rotation.y+=spin*dt*7;veh.g.position.x+=vx*spin*dt;veh.g.position.z=clamp(veh.g.position.z-vz*spin*dt,4.9,10.9);
+    CINE.shake=Math.max(0,CINE.shake-dt*1.2);const sh=CINE.shake*.12;cam.yaw+=(Math.random()-.5)*sh*.3;cam.pitch+=(Math.random()-.5)*sh*.2;
+    if(CINE.amb){const a=CINE.amb;if(a.position.x*a.userData.d<sx*a.userData.d-4)a.position.x+=a.userData.d*16*dt;CINE.sirenT-=dt;if(CINE.sirenT<=0){CINE.sirenT=.45;CINE.beat^=1;tone(CINE.beat?960:700,.4,'sine',.06);const on=CINE.beat;a.userData.l1.emissiveIntensity=on?3:.2;a.userData.l2.emissiveIntensity=on?.2:3}}};
+  const S=(at,run,crit)=>({at,run,crit});
+  const P=()=>HV.P;
+  CINE.steps=[
+   S(1.8,()=>{cap('Ambulance','Passers-by called for help. The ambulance arrives.');const a=makeAmb(),d=sx>0?-1:1;a.userData.d=d;a.position.set(sx-d*45,0,9.1);a.rotation.y=d>0?0:Math.PI;scene.add(a);CINE.amb=a}),
+   S(4.6,()=>{fade(1,.8);cap('','')}),
+   S(5.6,()=>{if(CINE.amb){scene.remove(CINE.amb);CINE.amb=null}sceneSet(true);const p=P();
+     cap('City Hospital','Emergency room');setCamBed(-.65,.95,.9,-Math.PI/2);place(p.nurse,-.35,HZ+.9);place(p.erdoc,-.35,HZ-.9);setPose(p.nurse,'hold');setPose(p.erdoc,'hold');
+     fade(0,1);CINE.tick=dt=>{look(p.nurse,1.55,Math.min(1,dt*1.6));p.nurse.g.userData.x=1;[p.nurse,p.erdoc].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)}}),
+   S(6.6,()=>sayH(P().nurse,'Stay with me, sir. You are in City Hospital. Do not move.',3.4)),
+   S(10.2,()=>{const p=P();CINE.tick=(old=>dt=>{old(dt);look(p.erdoc,1.62,Math.min(1,dt*1.6))})(CINE.tick);sayH(p.erdoc,'Pulse is fast but steady. Take him to the ICU for a full scan.',3.6)}),
+   S(14.2,()=>{const p=P();cap('','Chhotu rushes in.');place(p.chhotu,3.6,HZ+.2);const t0=CINE.t;
+     CINE.tick=dt=>{const k=clamp((CINE.t-t0)/2.2,0,1);p.chhotu.g.position.x=lerp(3.6,.2,k);p.chhotu.g.position.z=lerp(HZ+.2,HZ+.8,k);p.chhotu.phase=0;updatePerson(p.chhotu,dt,performance.now()/1000,k<1?1.4:0);faceCam(p.chhotu);look(p.chhotu,1.45,Math.min(1,dt*1.8));[p.nurse,p.erdoc].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)}}),
+   S(16.8,()=>{applyAway();const e=CINE.earn;sayH(P().chhotu,'Bhaiya! Bhaiya! I ran all the way. Do not worry, I am looking after the shops!',3.6);setPose(P().chhotu,'greet')}),
+   S(20.6,()=>{sayH(P().chhotu,CINE.earn>0?'While you rest, the shops earned '+fmt(CINE.earn)+'.':'The shops are quiet. Next time hire staff, bhaiya!',3.6);setPose(P().chhotu,'hold')}),
+   S(24.4,()=>sayH(P().nurse,'Visiting time is over. We are taking him to the ICU now.',3.2)),
+   S(27.2,()=>{const p=P();cap('','Wheeled to the ICU…');fade(.0,.1);const t0=CINE.t,x0=-.65,x1=40.35;p.chhotu.g.visible=false;p.erdoc.g.visible=false;setPose(p.nurse,'hold');
+     CINE.tick=dt=>{const k=clamp((CINE.t-t0)/8.5,0,1),e=k*k*(3-2*k);cam.x=lerp(x0,x1,e);cam.z=HZ;cam.y=.95+Math.sin(CINE.t*6)*.012;cam.yaw=Math.PI/2;cam.pitch=.62;
+       p.nurse.g.position.set(cam.x-1.1,0,HZ);p.nurse.g.rotation.y=Math.PI/2;updatePerson(p.nurse,dt,performance.now()/1000,k<1&&k>0?1.1:0);hospLight.position.set(cam.x,2.3,HZ);monitorTick(dt)}}),
+   S(36.2,()=>{const p=P();cap('ICU','Intensive Care Unit');p.nurse.g.visible=false;const pos=[[40.95,HZ+.95],[40.95,HZ-.95],[42.1,HZ+1.1],[42.1,HZ-1.1],[43.0,HZ]];
+     p.docs.forEach((d,i)=>{place(d,pos[i][0],pos[i][1]);setPose(d,'hold')});cam.x=40.35;cam.y=.95;cam.pitch=.6;cam.yaw=-Math.PI/2;
+     CINE.look=0;CINE.tick=dt=>{const d=p.docs[CINE.look];look(d,1.6,Math.min(1,dt*2));p.docs.forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)};hospLight.position.set(41,2.4,HZ)}),
+   S(37.4,()=>{CINE.look=0;sayH(P().docs[0],'Dr. Rao: The scan is clear. No bleeding in the head.',3.2)}),
+   S(40.8,()=>{CINE.look=1;sayH(P().docs[1],'Dr. Iyer: A small fracture in the left arm. We will put a cast.',3.2)}),
+   S(44.2,()=>{CINE.look=2;sayH(P().docs[2],'Dr. Khan: Heart rate is steady. Oxygen is ninety-eight percent.',3.2)}),
+   S(47.6,()=>{CINE.look=3;sayH(P().docs[3],'Dr. Nair: His blood pressure is back to normal.',3)}),
+   S(50.8,()=>{CINE.look=4;sayH(P().docs[4],'Dr. Mehta: He is strong. The danger has passed. His life is safe.',3.4)}),
+   S(55,()=>{fade(1,.9);cap('','Two days later…')}),
+   S(56.8,()=>{const p=P();applyAway();p.docs.forEach(d=>d.g.visible=false);cap('City Hospital','Recovery ward');setCamBed(-.5,1.1,.12,-Math.PI/2);
+     place(p.chhotu,2.3,HZ+.8);place(p.nurse,2.0,HZ-.9);place(p.docs[4],3.0,HZ);setPose(p.chhotu,'hold');setPose(p.nurse,'hold');setPose(p.docs[4],'hold');hospLight.position.set(0,2.4,HZ);
+     if(HV.win)HV.win.material.color.set(0xeaf6ff);fade(0,1);
+     CINE.tick=dt=>{[p.chhotu,p.nurse,p.docs[4]].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});look(p.docs[4],1.5,Math.min(1,dt*1.2));monitorTick(dt)}}),
+   S(58.4,()=>sayH(P().chhotu,'Bhaiya, Sharma ji sent you laddoos. He asked about you twice!',3.4)),
+   S(62,()=>sayH(P().docs[4],'You are safe now. Rest, eat well, and drive slowly next time.',3.4)),
+   S(65.6,()=>sayH(P().nurse,'Doctor says you can go home. Please settle the bill at the desk.',3.4)),
+   S(69,()=>{CINE.billAt=70;billModal()}),
+   S(70.5,()=>{sayH(P().chhotu,'Your vehicle is waiting outside, repaired and washed. Go, bhaiya!',3.2);fade(1,1.4)}),
+   S(72.6,finishCine)
+  ];
+  CINE.billAt=69;
+}
+function monitorTick(dt){
+  const g=ecgCv.getContext('2d');CINE.hbT+=dt;const w=256,h=128,x=(CINE.hbT*90)%w;
+  g.fillStyle='rgba(8,16,12,.14)';g.fillRect(0,0,w,h);g.fillStyle='#08100c';g.fillRect((x+4)%w,0,14,h);
+  const ph=(CINE.hbT%.85)/.85,y=h*.55-(ph<.1?ph*400:ph<.16?-(ph-.1)*500+40:ph<.2?-(ph-.16)*300:0);
+  g.fillStyle='#3dff8c';g.fillRect(x,y,3,3);g.fillStyle='#ffd24a';g.font='bold 18px sans-serif';g.fillText('HR 78   SpO2 98',10,24);ecgTex.needsUpdate=true;
+  const b=Math.floor(CINE.hbT/.85);if(b!==CINE.lastB){CINE.lastB=b;tone(1100,.09,'sine',.07)}
+}
+function skipCine(){
+  if(!CINE.on||CINE.wait)return;applyAway();CINE.steps.slice(CINE.i).forEach(s=>{if(s.at<CINE.billAt&&s.at>=0)CINE.i++});
+  if(CINE.amb){scene.remove(CINE.amb);CINE.amb=null}sceneSet(true);setCamBed(-.5,1.1,.12,-Math.PI/2);hospLight.position.set(0,2.4,HZ);
+  const p=HV.P;[p.nurse,p.erdoc].concat(p.docs).forEach(q=>q.g.visible=false);place(p.chhotu,2.3,HZ+.8);CINE.tick=dt=>{faceCam(p.chhotu);updatePerson(p.chhotu,dt,performance.now()/1000,0);monitorTick(dt)};cap('','');fade(0,.3);CINE.t=CINE.billAt;CINE.i=CINE.steps.findIndex(s=>s.at>=CINE.billAt-.001);
+}
+$('#bSkip').onclick=skipCine;
+EXT.update=(prev=>(sd,t,dt)=>{prev(sd,t,dt);
+  if(!CINE.on)return;if(!CINE.wait)CINE.t+=dt;
+  while(CINE.i<CINE.steps.length&&CINE.steps[CINE.i].at<=CINE.t){const s=CINE.steps[CINE.i++];s.run()}
+  if(CINE.tick)CINE.tick(dt);
+  if(HG.visible&&mode==='cine'){hospLight.position.y=2.4;hospLight.position.z=HZ;if(CINE.t<27||CINE.t>35)hospLight.position.x=cam.x}
+})(EXT.update);
 // ---------- main loop ----------
 let last=performance.now(),clk=0,birdT=3,autoSave=0,skyT=0;
 const DAYSEC=420;
@@ -1569,7 +1753,7 @@ function begin(cont){
 $('#bGo').onclick=()=>begin(false);
 {const s=peek();if(s&&typeof s.cash==='number'){$('#bCont').hidden=false;$('#bCont').textContent=`Continue · Day ${s.day} · ${fmt(s.cash)}`;$('#bCont').onclick=()=>begin(true)}}
 resize();makeEnv();applyTime(hourOf());
-window.__kirana={ST,XS,BR,DR,openRent,openBranch,openPhone,openBank,openRestaurant,startDrive,exitDrive,PARK,tfolk,bcusts,rival,openBuild,openShop,spawnCust,get me(){return me},cam,custs,openItem,serve,shout,begin};
+window.__kirana={crash,CINE,ST,XS,BR,DR,openRent,openBranch,openPhone,openBank,openRestaurant,startDrive,exitDrive,PARK,tfolk,bcusts,rival,openBuild,openShop,spawnCust,get me(){return me},cam,custs,openItem,serve,shout,begin};
 requestAnimationFrame(frame);
 })();
 </script>
