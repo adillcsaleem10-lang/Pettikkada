@@ -930,7 +930,7 @@ function openShop(tab){
         <span class="muted amt" style="min-width:52px">stock ${ST.stock[it.id]}</span>
         <div class="qty"><button data-pm="${it.id}" aria-label="Lower price">−</button><b style="font-size:16px;min-width:38px" class="${mg<=0?'bad':''}">${fmt(p)}</b><button data-pp="${it.id}" aria-label="Raise price">+</button></div>
         <button class="btn ghost" data-b="${it.id}" ${!un||ST.cash<cost||ST.stock[it.id]>=60?'disabled':''}>+10 · ${fmt(cost)}</button></div>`}).join('')+
-      `<div class="muted" style="line-height:18px">Each row: your stock, your selling price (− / +), and buying 10 more from the wholesaler. Cheaper than Sharma ji pulls his customers over.</div>`;
+      `<div class="row" style="flex-wrap:wrap"><button class="btn" id="pmax">Max all prices</button><button class="btn ghost" id="pnorm">Back to normal prices</button></div><div class="muted" style="line-height:18px">Max is 3× the normal price. Each row: your stock, your selling price (− / +), and buying 10 more from the wholesaler. Cheaper than Sharma ji pulls his customers over.</div>`;
     }else if(tab==='up'){
       body=UPS.map(u=>{const has=ST.up[u.id];return `<div class="row"><div class="grow"><b>${u.name}</b><div class="muted" style="line-height:16px">${u.desc}</div></div>${has?'<b class="good">Owned</b>':`<button class="btn ghost" data-u="${u.id}" ${ST.cash<u.cost?'disabled':''}>${fmt(u.cost)}</button>`}</div>`}).join('');
     }else if(tab==='staff'){
@@ -947,6 +947,7 @@ function openShop(tab){
     el.querySelectorAll('[data-pm]').forEach(b=>b.onclick=()=>{ST.price[b.dataset.pm]=Math.max(1,ST.price[b.dataset.pm]-1);applyShop();render()});
     el.querySelectorAll('[data-pp]').forEach(b=>b.onclick=()=>{ST.price[b.dataset.pp]=Math.min(BYID[b.dataset.pp].price*3,ST.price[b.dataset.pp]+1);applyShop();render()});
     el.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>{const it=BYID[b.dataset.b],c=Math.round(it.ws*10);if(ST.cash>=c){ST.cash-=c;ST.stock[it.id]=Math.min(60,ST.stock[it.id]+10);SFX.coin();applyShop();refreshHud();render()}});
+    {const mx=$('#pmax');if(mx)mx.onclick=()=>{ITEMS.forEach(it=>ST.price[it.id]=it.price*3);SFX.ding();applyShop();toast('All prices set to the maximum');render()};const nm=$('#pnorm');if(nm)nm.onclick=()=>{ITEMS.forEach(it=>ST.price[it.id]=it.price);applyShop();toast('Prices back to normal');render()}}
     {const h=$('#khire');if(h)h.onclick=()=>{if(ST.cash>=250&&XS.kStaff<4){ST.cash-=250;XS.kStaff++;SFX.ding();refreshHud();render()}};const f=$('#kfire');if(f)f.onclick=()=>{if(XS.kStaff>0){XS.kStaff--;render()}}}
     el.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{const u=UPS.find(x=>x.id===b.dataset.u);if(ST.cash>=u.cost){ST.cash-=u.cost;ST.up[u.id]=1;SFX.ding();applyShop();refreshHud();toast(u.name+' installed');render()}});
   };render();
@@ -1316,7 +1317,7 @@ function openBranch(key,tab){
         <div class="qty"><button data-pm="${it.id}" aria-label="Lower price">−</button><b style="font-size:15px;min-width:62px" class="${p<=it.ws?'bad':''}">${fmt(p)}</b><button data-pp="${it.id}" aria-label="Raise price">+</button></div>
         <button class="btn ghost" data-b="${it.id}" ${ST.cash<cost||b.stock[it.id]>=40?'disabled':''}>+${it.lot} · ${fmt(cost)}</button>
         ${it.id==='e_smart'&&b.stock[it.id]>0&&XS.phone!=='smart'?`<button class="btn ghost" data-keep="1">Keep one for me</button>`:''}</div>`}).join('')+
-        `<div class="muted" style="line-height:18px">Red price means you sell below what you paid. Staff serve waiting customers for you.</div>`;
+        `<div class="row" style="flex-wrap:wrap"><button class="btn" id="bmax">Max all prices</button><button class="btn ghost" id="bnorm">Back to normal prices</button></div><div class="muted" style="line-height:18px">Max is 3× the normal price. Red price means you sell below what you paid. Staff serve waiting customers for you.</div>`;
     }else if(tab==='staff'){
       body=`<div class="row"><span class="grow">Staff on the floor</span><b class="amt">${b.staff} / 8</b></div><div class="row"><span class="grow">Wage per day each</span><b class="amt">${fmt(def.wage)}</b></div>
       <div class="muted" style="line-height:18px">Each person serves waiting customers by themselves and makes the shop more attractive. Wages are paid at midnight; if you cannot pay, staff leave.</div>
@@ -1331,6 +1332,7 @@ function openBranch(key,tab){
     el.querySelectorAll('[data-pp]').forEach(x=>x.onclick=()=>{const it=BITEM[x.dataset.pp];b.price[it.id]=Math.min(it.price*3,b.price[it.id]+stepOf(it));render()});
     el.querySelectorAll('[data-b]').forEach(x=>x.onclick=()=>{const it=BITEM[x.dataset.b],c=Math.round(it.ws*it.lot);if(ST.cash>=c){ST.cash-=c;b.stock[it.id]=Math.min(40,b.stock[it.id]+it.lot);SFX.coin();B.viz();refreshHud();render()}});
     el.querySelectorAll('[data-keep]').forEach(x=>x.onclick=()=>{b.stock.e_smart--;XS.phone='smart';SFX.ding();toast('You now carry a smartphone. New phone apps unlocked.');B.viz();render()});
+    {const mx=$('#bmax');if(mx)mx.onclick=()=>{def.items.forEach(it=>b.price[it.id]=it.price*3);SFX.ding();toast('All prices set to the maximum');render()};const nm=$('#bnorm');if(nm)nm.onclick=()=>{def.items.forEach(it=>b.price[it.id]=it.price);render()}}
     const h=$('#hire');if(h)h.onclick=()=>{if(ST.cash>=def.staffCost&&b.staff<8){ST.cash-=def.staffCost;b.staff++;B.syncStaff();SFX.ding();refreshHud();render()}};
     const f=$('#fire');if(f)f.onclick=()=>{if(b.staff>0){b.staff--;B.syncStaff();render()}};
   };render();
