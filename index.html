@@ -96,6 +96,11 @@ input.txt{font:inherit;border:0;border-bottom:2px solid var(--ink);background:tr
 #cap b{display:block;font-family:var(--f-display);font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.75}
 #bSkip{position:fixed;right:max(14px,env(safe-area-inset-right,0px));top:calc(14px + env(safe-area-inset-top,0px));z-index:46;padding:6px 14px;font-size:14px}
 .cine #hud,.cine #acts,.cine #score,.cine #nav,.cine #bill,.cine #itemPanel,.cine #hint,.cine #joy{display:none!important}
+.scn #hud,.scn #acts,.scn #score,.scn #nav,.scn #bill,.scn #itemPanel{display:none!important}
+#hurt{position:fixed;inset:0;pointer-events:none;z-index:48;opacity:0;transition:opacity .35s;background:radial-gradient(ellipse at center,rgba(120,0,10,0) 30%,rgba(140,0,14,.78) 100%)}
+#hearts{position:fixed;inset:0;pointer-events:none;z-index:47;overflow:hidden}
+.heart{position:absolute;bottom:12%;font-size:34px;animation:hup 2.6s ease-out forwards}
+@keyframes hup{0%{opacity:0;transform:translateY(0) scale(.6)}15%{opacity:1}100%{opacity:0;transform:translateY(-62vh) scale(1.4)}}
 @media (prefers-reduced-motion:reduce){.toast{animation:none}}
 </style>
 
@@ -120,6 +125,7 @@ input.txt{font:inherit;border:0;border-bottom:2px solid var(--ink);background:tr
   <button class="btn" id="bEnter" hidden></button>
   <button class="btn" id="bExit" hidden>Get out here</button>
   <button class="btn" id="bShout" hidden>Call out "Aao aao!"</button>
+  <button class="btn" id="bMock" hidden>Mock Sharma ji</button>
   <button class="btn" id="bCounter" hidden>Go behind my counter</button>
 </div>
 <div id="hint">Drag to look · W A S D to walk · click a jar, packet or person</div>
@@ -130,6 +136,8 @@ input.txt{font:inherit;border:0;border-bottom:2px solid var(--ink);background:tr
 <div id="toasts"></div>
 <div id="fade"></div>
 <div id="cap" hidden></div>
+<div id="hurt"></div>
+<div id="hearts"></div>
 <button class="btn" id="bSkip" hidden>Skip</button>
 <div id="start">
   <div class="slip">
@@ -406,7 +414,15 @@ const POSES={
   greet:{R:[-2.6,-.15,-.5],L:[-.5,-.05,-.8]},
   give:{R:[-1.15,0,-.2],L:[-1.05,0,-.2]},
   take:{R:[-1.05,0,-.7],L:[-.5,-.05,-.8]},
-  walk:{R:[0,.05,-.2],L:[0,-.05,-.2]}
+  walk:{R:[0,.05,-.2],L:[0,-.05,-.2]},
+  beg:{R:[-1.05,.18,-.55],L:[-.2,.1,-.5]},
+  pray:{R:[-.95,-.35,-1.9],L:[-.95,.35,-1.9]},
+  cheer:{R:[-2.9,.5,-.25],L:[-2.9,-.5,-.25]},
+  wide:{R:[-1.25,.85,-.3],L:[-1.25,-.85,-.3]},
+  hug:{R:[-1.15,-.55,-1.1],L:[-1.15,.55,-1.1]},
+  drink:{R:[-1.5,-.5,-2.4],L:[-.5,-.05,-.8]},
+  windup:{R:[-3.0,.15,-.5],L:[-.7,-.1,-.6]},
+  throw:{R:[-1.25,-.05,-.2],L:[-.5,-.05,-.8]}
 };
 function makePerson(o){
   const g=new THREE.Group(),P={g,arms:{},legs:[],pose:'idle',cur:{R:[0,0,0],L:[0,0,0]},phase:Math.random()*6,headBase:0};
@@ -448,7 +464,7 @@ function updatePerson(P,dt,t,walkSpeed){
   for(const side of ['R','L']){
     const c=P.cur[side],tg=pt[side].slice();
     if(P.pose==='greet'&&side==='R')tg[2]+=Math.sin(t*9)*.5;
-    if(walkSpeed>0){const s=Math.sin(P.phase)*.7*(side==='R'?1:-1);tg[0]=s;tg[2]=-.15}
+    if(walkSpeed>0&&!P.holdArms){const s=Math.sin(P.phase)*.7*(side==='R'?1:-1);tg[0]=s;tg[2]=-.15}
     for(let i=0;i<3;i++)c[i]+=(tg[i]-c[i])*k;
     const a=P.arms[side];a.sh.rotation.x=c[0];a.sh.rotation.z=c[1]+(side==='R'?-.06:.06);a.el.rotation.x=c[2];
   }
@@ -756,10 +772,10 @@ cvEl.addEventListener('wheel',e=>{cam.fov=clamp(cam.fov+e.deltaY*.03,38,78);e.pr
   const end=()=>{id=null;joy.x=joy.y=0;k.style.transform=''};j.addEventListener('pointerup',end);j.addEventListener('pointercancel',end)})();
 function updateCam(dt){
   if(mode==='drive')EXT.followCam(dt);
-  if(mode==='walk'&&!paused){
+  if(mode==='walk'&&!paused&&!SCN.freeze){
     let f=0,s=0;if(keys.KeyW||keys.ArrowUp)f+=1;if(keys.KeyS||keys.ArrowDown)f-=1;if(keys.KeyD)s+=1;if(keys.KeyA)s-=1;
     if(keys.ArrowLeft)cam.yaw+=dt*1.6;if(keys.ArrowRight)cam.yaw-=dt*1.6;
-    f-=joy.y;s+=joy.x;const sp=(keys.ShiftLeft?4:2.3)*dt,l=Math.hypot(f,s);
+    f-=joy.y;s+=joy.x;const sp=(SCN.chase?4.4:(keys.ShiftLeft?4:2.3))*dt,l=Math.hypot(f,s);
     if(l>.05){const n=Math.min(1,l);f/=l;s/=l;cam.x+=(-Math.sin(cam.yaw)*f+Math.cos(cam.yaw)*s)*sp*n;cam.z+=(-Math.cos(cam.yaw)*f-Math.sin(cam.yaw)*s)*sp*n;cam.bob+=dt*9*n;}
     cam.x=clamp(cam.x,-118,118);cam.z=clamp(cam.z,1.5,4.1);
   }
@@ -780,7 +796,7 @@ function pickAt(x,y){
 }
 function hover(x,y){
   const p=pickAt(x,y),t=$('#tip');
-  if(!p||paused){t.hidden=true;cvEl.style.cursor='';return}
+  if(!p||paused||SCN.lock){t.hidden=true;cvEl.style.cursor='';return}
   let s='';const ex=EXT.hover(p);
   if(ex)s=ex;else if(p.kind==='item'){const it=BYID[p.id];s=it.name+' · '+fmt(p.shop===rival?R_ITEM(it):ST.price[it.id]);if(p.shop===me)s+=' · stock '+ST.stock[it.id]}
   else if(p.kind==='keeper')s=p.shop===rival?'Sharma ji — say hello':'';
@@ -790,7 +806,7 @@ function hover(x,y){
   t.textContent=s;t.hidden=false;t.style.left=x+'px';t.style.top=y+'px';cvEl.style.cursor='pointer';
 }
 function click(x,y){
-  if(paused||!started||mode==='drive')return;audioInit();
+  if(paused||!started||mode==='drive'||SCN.lock)return;audioInit();
   const p=pickAt(x,y);if(!p){closeItem();return}
   if(EXT.click(p))return;
   if(p.kind==='item'){if(p.shop===rival){openItem(p.id)}else openShop('stock')}
@@ -1614,6 +1630,43 @@ function billModal(){
   $('#hpay').onclick=()=>{let rest=total;const c=Math.min(ST.cash,rest);ST.cash-=c;rest-=c;const s=Math.min(XS.bank,rest);XS.bank-=s;rest-=s;if(rest>0)XS.loan+=rest;
     $('#modal').hidden=true;paused=true;refreshHud();CINE.wait=false;CINE.t=CINE.billAt+.01;toast('Bill paid: '+fmt(total)+(rest>0?' (loan added: '+fmt(rest)+')':''));SFX.coin()}
 }
+function hospSteps(S,P,o){
+  o=o||{};const D=o.docs||['Dr. Rao: The scan is clear. No bleeding in the head.','Dr. Iyer: A small fracture in the left arm. We will put a cast.','Dr. Khan: Heart rate is steady. Oxygen is ninety-eight percent.','Dr. Nair: His blood pressure is back to normal.','Dr. Mehta: He is strong. The danger has passed. His life is safe.'];
+  return [
+   S(5.6,()=>{if(CINE.amb){scene.remove(CINE.amb);CINE.amb=null}sceneSet(true);const p=P();
+     cap('City Hospital','Emergency room');setCamBed(-.65,.95,.9,-Math.PI/2);place(p.nurse,-.35,HZ+.9);place(p.erdoc,-.35,HZ-.9);setPose(p.nurse,'hold');setPose(p.erdoc,'hold');
+     fade(0,1);CINE.tick=dt=>{look(p.nurse,1.55,Math.min(1,dt*1.6));p.nurse.g.userData.x=1;[p.nurse,p.erdoc].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)}}),
+   S(6.6,()=>sayH(P().nurse,(o.nurse1||'Stay with me, sir. You are in City Hospital. Do not move.'),3.4)),
+   S(10.2,()=>{const p=P();CINE.tick=(old=>dt=>{old(dt);look(p.erdoc,1.62,Math.min(1,dt*1.6))})(CINE.tick);sayH(p.erdoc,(o.erdoc||'Pulse is fast but steady. Take him to the ICU for a full scan.'),3.6)}),
+   S(14.2,()=>{const p=P();cap('','Chhotu rushes in.');place(p.chhotu,3.6,HZ+.2);const t0=CINE.t;
+     CINE.tick=dt=>{const k=clamp((CINE.t-t0)/2.2,0,1);p.chhotu.g.position.x=lerp(3.6,.2,k);p.chhotu.g.position.z=lerp(HZ+.2,HZ+.8,k);p.chhotu.phase=0;updatePerson(p.chhotu,dt,performance.now()/1000,k<1?1.4:0);faceCam(p.chhotu);look(p.chhotu,1.45,Math.min(1,dt*1.8));[p.nurse,p.erdoc].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)}}),
+   S(16.8,()=>{applyAway();const e=CINE.earn;sayH(P().chhotu,'Bhaiya! Bhaiya! I ran all the way. Do not worry, I am looking after the shops!',3.6);setPose(P().chhotu,'greet')}),
+   S(20.6,()=>{sayH(P().chhotu,CINE.earn>0?'While you rest, the shops earned '+fmt(CINE.earn)+'.':'The shops are quiet. Next time hire staff, bhaiya!',3.6);setPose(P().chhotu,'hold')}),
+   S(24.4,()=>sayH(P().nurse,'Visiting time is over. We are taking him to the ICU now.',3.2)),
+   S(27.2,()=>{const p=P();cap('','Wheeled to the ICU…');fade(.0,.1);const t0=CINE.t,x0=-.65,x1=40.35;p.chhotu.g.visible=false;p.erdoc.g.visible=false;setPose(p.nurse,'hold');
+     CINE.tick=dt=>{const k=clamp((CINE.t-t0)/8.5,0,1),e=k*k*(3-2*k);cam.x=lerp(x0,x1,e);cam.z=HZ;cam.y=.95+Math.sin(CINE.t*6)*.012;cam.yaw=Math.PI/2;cam.pitch=.62;
+       p.nurse.g.position.set(cam.x-1.1,0,HZ);p.nurse.g.rotation.y=Math.PI/2;updatePerson(p.nurse,dt,performance.now()/1000,k<1&&k>0?1.1:0);hospLight.position.set(cam.x,2.3,HZ);monitorTick(dt)}}),
+   S(36.2,()=>{const p=P();cap('ICU','Intensive Care Unit');p.nurse.g.visible=false;const pos=[[40.95,HZ+.95],[40.95,HZ-.95],[42.1,HZ+1.1],[42.1,HZ-1.1],[43.0,HZ]];
+     p.docs.forEach((d,i)=>{place(d,pos[i][0],pos[i][1]);setPose(d,'hold')});cam.x=40.35;cam.y=.95;cam.pitch=.6;cam.yaw=-Math.PI/2;
+     CINE.look=0;CINE.tick=dt=>{const d=p.docs[CINE.look];look(d,1.6,Math.min(1,dt*2));p.docs.forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)};hospLight.position.set(41,2.4,HZ)}),
+   S(37.4,()=>{CINE.look=0;sayH(P().docs[0],D[0],3.2)}),
+   S(40.8,()=>{CINE.look=1;sayH(P().docs[1],D[1],3.2)}),
+   S(44.2,()=>{CINE.look=2;sayH(P().docs[2],D[2],3.2)}),
+   S(47.6,()=>{CINE.look=3;sayH(P().docs[3],D[3],3)}),
+   S(50.8,()=>{CINE.look=4;sayH(P().docs[4],D[4],3.4)}),
+   S(55,()=>{fade(1,.9);cap('','Two days later…')}),
+   S(56.8,()=>{const p=P();applyAway();p.docs.forEach(d=>d.g.visible=false);cap('City Hospital','Recovery ward');setCamBed(-.5,1.1,.12,-Math.PI/2);
+     place(p.chhotu,2.3,HZ+.8);place(p.nurse,2.0,HZ-.9);place(p.docs[4],3.0,HZ);setPose(p.chhotu,'hold');setPose(p.nurse,'hold');setPose(p.docs[4],'hold');hospLight.position.set(0,2.4,HZ);
+     if(HV.win)HV.win.material.color.set(0xeaf6ff);fade(0,1);
+     CINE.tick=dt=>{[p.chhotu,p.nurse,p.docs[4]].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});look(p.docs[4],1.5,Math.min(1,dt*1.2));monitorTick(dt)}}),
+   S(58.4,()=>sayH(P().chhotu,(o.visit||'Bhaiya, Sharma ji sent you laddoos. He asked about you twice!'),3.4)),
+   S(62,()=>sayH(P().docs[4],(o.safe||'You are safe now. Rest, eat well, and drive slowly next time.'),3.4)),
+   S(65.6,()=>sayH(P().nurse,(o.discharge||'Doctor says you can go home. Please settle the bill at the desk.'),3.4)),
+   S(69,()=>{if(o.free){cap('City Hospital','Treatment is free of charge. No bill to pay.');CINE.billAt=69}else{CINE.billAt=70;billModal()}}),
+   S(70.5,()=>{sayH(P().chhotu,(o.last||'Your vehicle is waiting outside, repaired and washed. Go, bhaiya!'),3.2);fade(1,1.4)}),
+   S(72.6,o.finish||finishCine)
+  ];
+}
 function crash(v){
   if(CINE.on||mode!=='drive'||!DR.veh)return;
   CINE.on=true;CINE.t=0;CINE.i=0;CINE.flags={};CINE.wait=false;CINE.pid=Math.abs(v);CINE.vid=DR.veh.id;CINE.tick=null;buildHospital();
@@ -1631,39 +1684,7 @@ function crash(v){
   CINE.steps=[
    S(1.8,()=>{cap('Ambulance','Passers-by called for help. The ambulance arrives.');const a=makeAmb(),d=sx>0?-1:1;a.userData.d=d;a.position.set(sx-d*45,0,9.1);a.rotation.y=d>0?0:Math.PI;scene.add(a);CINE.amb=a}),
    S(4.6,()=>{fade(1,.8);cap('','')}),
-   S(5.6,()=>{if(CINE.amb){scene.remove(CINE.amb);CINE.amb=null}sceneSet(true);const p=P();
-     cap('City Hospital','Emergency room');setCamBed(-.65,.95,.9,-Math.PI/2);place(p.nurse,-.35,HZ+.9);place(p.erdoc,-.35,HZ-.9);setPose(p.nurse,'hold');setPose(p.erdoc,'hold');
-     fade(0,1);CINE.tick=dt=>{look(p.nurse,1.55,Math.min(1,dt*1.6));p.nurse.g.userData.x=1;[p.nurse,p.erdoc].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)}}),
-   S(6.6,()=>sayH(P().nurse,'Stay with me, sir. You are in City Hospital. Do not move.',3.4)),
-   S(10.2,()=>{const p=P();CINE.tick=(old=>dt=>{old(dt);look(p.erdoc,1.62,Math.min(1,dt*1.6))})(CINE.tick);sayH(p.erdoc,'Pulse is fast but steady. Take him to the ICU for a full scan.',3.6)}),
-   S(14.2,()=>{const p=P();cap('','Chhotu rushes in.');place(p.chhotu,3.6,HZ+.2);const t0=CINE.t;
-     CINE.tick=dt=>{const k=clamp((CINE.t-t0)/2.2,0,1);p.chhotu.g.position.x=lerp(3.6,.2,k);p.chhotu.g.position.z=lerp(HZ+.2,HZ+.8,k);p.chhotu.phase=0;updatePerson(p.chhotu,dt,performance.now()/1000,k<1?1.4:0);faceCam(p.chhotu);look(p.chhotu,1.45,Math.min(1,dt*1.8));[p.nurse,p.erdoc].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)}}),
-   S(16.8,()=>{applyAway();const e=CINE.earn;sayH(P().chhotu,'Bhaiya! Bhaiya! I ran all the way. Do not worry, I am looking after the shops!',3.6);setPose(P().chhotu,'greet')}),
-   S(20.6,()=>{sayH(P().chhotu,CINE.earn>0?'While you rest, the shops earned '+fmt(CINE.earn)+'.':'The shops are quiet. Next time hire staff, bhaiya!',3.6);setPose(P().chhotu,'hold')}),
-   S(24.4,()=>sayH(P().nurse,'Visiting time is over. We are taking him to the ICU now.',3.2)),
-   S(27.2,()=>{const p=P();cap('','Wheeled to the ICU…');fade(.0,.1);const t0=CINE.t,x0=-.65,x1=40.35;p.chhotu.g.visible=false;p.erdoc.g.visible=false;setPose(p.nurse,'hold');
-     CINE.tick=dt=>{const k=clamp((CINE.t-t0)/8.5,0,1),e=k*k*(3-2*k);cam.x=lerp(x0,x1,e);cam.z=HZ;cam.y=.95+Math.sin(CINE.t*6)*.012;cam.yaw=Math.PI/2;cam.pitch=.62;
-       p.nurse.g.position.set(cam.x-1.1,0,HZ);p.nurse.g.rotation.y=Math.PI/2;updatePerson(p.nurse,dt,performance.now()/1000,k<1&&k>0?1.1:0);hospLight.position.set(cam.x,2.3,HZ);monitorTick(dt)}}),
-   S(36.2,()=>{const p=P();cap('ICU','Intensive Care Unit');p.nurse.g.visible=false;const pos=[[40.95,HZ+.95],[40.95,HZ-.95],[42.1,HZ+1.1],[42.1,HZ-1.1],[43.0,HZ]];
-     p.docs.forEach((d,i)=>{place(d,pos[i][0],pos[i][1]);setPose(d,'hold')});cam.x=40.35;cam.y=.95;cam.pitch=.6;cam.yaw=-Math.PI/2;
-     CINE.look=0;CINE.tick=dt=>{const d=p.docs[CINE.look];look(d,1.6,Math.min(1,dt*2));p.docs.forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});monitorTick(dt)};hospLight.position.set(41,2.4,HZ)}),
-   S(37.4,()=>{CINE.look=0;sayH(P().docs[0],'Dr. Rao: The scan is clear. No bleeding in the head.',3.2)}),
-   S(40.8,()=>{CINE.look=1;sayH(P().docs[1],'Dr. Iyer: A small fracture in the left arm. We will put a cast.',3.2)}),
-   S(44.2,()=>{CINE.look=2;sayH(P().docs[2],'Dr. Khan: Heart rate is steady. Oxygen is ninety-eight percent.',3.2)}),
-   S(47.6,()=>{CINE.look=3;sayH(P().docs[3],'Dr. Nair: His blood pressure is back to normal.',3)}),
-   S(50.8,()=>{CINE.look=4;sayH(P().docs[4],'Dr. Mehta: He is strong. The danger has passed. His life is safe.',3.4)}),
-   S(55,()=>{fade(1,.9);cap('','Two days later…')}),
-   S(56.8,()=>{const p=P();applyAway();p.docs.forEach(d=>d.g.visible=false);cap('City Hospital','Recovery ward');setCamBed(-.5,1.1,.12,-Math.PI/2);
-     place(p.chhotu,2.3,HZ+.8);place(p.nurse,2.0,HZ-.9);place(p.docs[4],3.0,HZ);setPose(p.chhotu,'hold');setPose(p.nurse,'hold');setPose(p.docs[4],'hold');hospLight.position.set(0,2.4,HZ);
-     if(HV.win)HV.win.material.color.set(0xeaf6ff);fade(0,1);
-     CINE.tick=dt=>{[p.chhotu,p.nurse,p.docs[4]].forEach(q=>{faceCam(q);updatePerson(q,dt,performance.now()/1000,0)});look(p.docs[4],1.5,Math.min(1,dt*1.2));monitorTick(dt)}}),
-   S(58.4,()=>sayH(P().chhotu,'Bhaiya, Sharma ji sent you laddoos. He asked about you twice!',3.4)),
-   S(62,()=>sayH(P().docs[4],'You are safe now. Rest, eat well, and drive slowly next time.',3.4)),
-   S(65.6,()=>sayH(P().nurse,'Doctor says you can go home. Please settle the bill at the desk.',3.4)),
-   S(69,()=>{CINE.billAt=70;billModal()}),
-   S(70.5,()=>{sayH(P().chhotu,'Your vehicle is waiting outside, repaired and washed. Go, bhaiya!',3.2);fade(1,1.4)}),
-   S(72.6,finishCine)
-  ];
+  ].concat(hospSteps(S,P,{}));
   CINE.billAt=69;
 }
 function monitorTick(dt){
@@ -1685,6 +1706,252 @@ EXT.update=(prev=>(sd,t,dt)=>{prev(sd,t,dt);
   if(CINE.tick)CINE.tick(dt);
   if(HG.visible&&mode==='cine'){hospLight.position.y=2.4;hospLight.position.z=HZ;if(CINE.t<27||CINE.t>35)hospLight.position.x=cam.x}
 })(EXT.update);
+// ===================== NEW: MOCK SHARMA JI (2 endings) + BEGGAR HUG =====================
+const SC={on:false,t:0,i:0,steps:[],L:{},kind:'',cause:'',shake:0,fov:62,A:null};
+const SCN={lock:false,chase:false,freeze:false,cd:0,chk:0,hintDay:0,next:Math.random()<.5?'kick':'bottle',begCd:0,begBub:6,begHint:false};
+const hurtEl=$('#hurt'),heartsEl=$('#hearts'),mockBtn=$('#bMock');
+const angd=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
+const ease3=u=>u*u*(3-2*u);
+const TW=[];
+function tween(o,k,to,dur){for(let i=TW.length-1;i>=0;i--)if(TW[i].o===o&&TW[i].k===k)TW.splice(i,1);TW.push({o,k,a:o[k],b:to,t:0,d:Math.max(.01,dur||.5)})}
+function tweenStep(dt){for(let i=TW.length-1;i>=0;i--){const w=TW[i];w.t+=dt;const u=Math.min(1,w.t/w.d);w.o[w.k]=w.a+(w.b-w.a)*ease3(u);if(u>=1)TW.splice(i,1)}}
+function camLook(x,y,z,k){const dx=x-cam.x,dz=z-cam.z,dy=y-cam.y,L=Math.hypot(dx,dz)||.001;const ty=Math.atan2(-dx,-dz);cam.yaw+=angd(ty,cam.yaw)*k;cam.pitch+=(clamp(Math.atan2(dy,L),-1,1)-cam.pitch)*k}
+
+// ---- an actor drives one person: walking, jumping, kicking, sitting, head pose ----
+function mkActor(P,x,y0,z,ry){
+  return {P,x,z,y:0,y0,ry,ryT:ry,goal:null,speed:0,pose:'idle',hx:0,hy:0,hz:0,kick:0,sit:0,jump:null,lookCam:false,
+  step(dt,t){
+    if(this.jump){const j=this.jump;j.u=Math.min(1,j.u+dt/j.dur);this.x=lerp(j.x0,j.x1,j.u);this.z=lerp(j.z0,j.z1,j.u);this.y=Math.sin(Math.PI*j.u)*j.h;this.speed=0;if(j.u>=1){this.y=0;this.jump=null;if(j.done)j.done()}}
+    else if(this.goal){const g=this.goal,dx=g.x-this.x,dz=g.z-this.z,l=Math.hypot(dx,dz);
+      if(l<.05){this.goal=null;this.speed=0;if(g.done)g.done()}
+      else{const s=Math.min(l,g.sp*dt);this.x+=dx/l*s;this.z+=dz/l*s;if(l>.2)this.ryT=Math.atan2(dx,dz);this.speed=g.sp/1.4}}
+    else this.speed=0;
+    this.ry+=angd(this.ryT,this.ry)*Math.min(1,dt*(this.goal?10:7));
+    if(this.lookCam){const a=angd(Math.atan2(cam.x-this.x,cam.z-this.z),this.ry);this.hy+=(clamp(a,-.9,.9)-this.hy)*Math.min(1,dt*5)}
+    const P=this.P;P.g.position.set(this.x,this.y0+this.y,this.z);P.g.rotation.y=this.ry;
+    setPose(P,this.pose);updatePerson(P,dt,t,this.speed);
+    if(this.sit>0){P.body.position.y=-.78*this.sit;P.legs[0].rotation.x=P.legs[1].rotation.x=-1.5*this.sit}
+    if(this.kick>0)P.legs[0].rotation.x=-1.7*this.kick;
+    P.head.rotation.x=this.hx;P.head.rotation.y=this.hy;P.head.rotation.z=this.hz;
+  }};
+}
+
+// ---- scenario sequencer ----
+const S_=(at,run)=>({at,run});
+function scBegin(kind){SC.on=true;SC.t=0;SC.i=0;SC.steps=[];SC.L={};SC.kind=kind;SC.shake=0;SC.fov=cam.fov;SCN.lock=true;SCN.freeze=true;SCN.chase=false;
+  document.body.classList.add('scn');closeItem();mockBtn.hidden=true;cap();audioInit()}
+function scSteps(arr){SC.steps=arr;SC.i=0;SC.t=0}
+function scEnd(){SC.on=false;SC.L={};SC.steps=[];SC.A=null;SCN.lock=false;SCN.freeze=false;SCN.chase=false;document.body.classList.remove('scn');
+  cvEl.style.transition='';cvEl.style.transform='';cvEl.style.filter='';hurtEl.style.opacity=0;cam.fov=SC.fov;cap()}
+function hearts(n){for(let i=0;i<n;i++)setTimeout(()=>{const h=document.createElement('span');h.className='heart';h.textContent=pick(['❤️','💖','💕','💗']);h.style.left=rnd(12,88)+'%';h.style.fontSize=rnd(26,46)+'px';heartsEl.appendChild(h);setTimeout(()=>h.remove(),2800)},i*140)}
+function redFlash(){fade(0,.05);fadeEl.style.background='#b3000f';fadeEl.style.opacity=.7;setTimeout(()=>{fadeEl.style.transition='opacity .5s';fadeEl.style.opacity=0},120);setTimeout(()=>fadeEl.style.background='#000',800)}
+function tint(col,op,ms){fade(0,.05);fadeEl.style.background=col;fadeEl.style.opacity=op;setTimeout(()=>{fadeEl.style.transition='opacity .6s';fadeEl.style.opacity=0},ms||250);setTimeout(()=>fadeEl.style.background='#000',ms?ms+800:1100)}
+
+// ---- the beer bottle (Sharma ji) ----
+const BOT=(function(){
+  const g=new THREE.Group(),glass=M(0x5b2a0c,{roughness:.25,metalness:.1});
+  cyl(.034,.034,.17,glass,0,.085,0,g,10);cyl(.03,.034,.03,glass,0,.185,0,g,10);cyl(.013,.02,.09,glass,0,.245,0,g,8);
+  cyl(.016,.016,.012,M(0xd4af37,{metalness:.7,roughness:.3}),0,.295,0,g,8);cyl(.0345,.0345,.07,M(0xf1e4b0,{roughness:.8}),0,.09,0,g,10);
+  g.visible=false;return {g};
+})();
+function botHand(){const el=rival.keeper.arms.R.el;el.add(BOT.g);BOT.g.scale.set(1,1,1);BOT.g.position.set(0,-.305,-.068);BOT.g.rotation.set(1.35,0,0)}
+function botHead(){rival.keeper.head.add(BOT.g);BOT.g.scale.set(1,1,1);BOT.g.position.set(0,.13,.35);BOT.g.rotation.set(-2.2143,0,0)}
+const shards=[];
+function shatter(){
+  const fw=new THREE.Vector3(-Math.sin(cam.yaw)*Math.cos(cam.pitch),Math.sin(cam.pitch),-Math.cos(cam.yaw)*Math.cos(cam.pitch));
+  for(let i=0;i<18;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.02+Math.random()*.03,.008,.015+Math.random()*.02),M(i%3?0x5b2a0c:0xcfe8e0,{roughness:.2}));
+    m.position.set(cam.x+fw.x*.45,cam.y+fw.y*.45-.05,cam.z+fw.z*.45);
+    m.userData.v=new THREE.Vector3((Math.random()-.5)*2.4,Math.random()*1.8+.4,(Math.random()-.5)*2.4);m.userData.life=3;scene.add(m);shards.push(m)}
+  tone(2600,.25,'square',.08,0,.5);tone(3400,.2,'square',.06,.04,.5);burst(.35,4500,1,.4,'highpass');burst(.2,2500,1,.3,'highpass',.06);
+}
+function shardsStep(dt){for(let i=shards.length-1;i>=0;i--){const m=shards[i],u=m.userData;u.life-=dt;u.v.y-=9*dt;m.position.addScaledVector(u.v,dt);m.rotation.x+=dt*9;m.rotation.z+=dt*7;if(m.position.y<G){m.position.y=G;u.v.set(0,0,0)}if(u.life<=0){scene.remove(m);shards.splice(i,1)}}}
+
+// ---- common hit + knock-down ----
+function hitEffects(msg){
+  SC.shake=1;burst(.3,160,1,.5,'lowpass');tone(70,.35,'sine',.35,0,.4);burst(.12,1800,1,.25,'highpass');
+  redFlash();hurtEl.style.opacity=1;
+  SC.L.cam=null;tween(cam,'y',.45,.8);tween(cam,'pitch',.55,.8);
+  cvEl.style.transition='transform .8s ease-out,filter .8s';cvEl.style.transform='rotate(11deg) scale(1.1)';cvEl.style.filter='blur(2.5px) saturate(.5)';
+  cap('Ouch!',msg);
+}
+function mockCleanup(){
+  const K=rival.keeper;K.scripted=false;K.holdArms=false;K.g.position.set(0,G,-.98);K.g.rotation.set(0,0,0);K.head.rotation.set(0,0,0);K.legs.forEach(l=>l.rotation.x=0);K.body.position.y=0;setPose(K,'idle');
+  BOT.g.visible=false;botHand();shards.forEach(s=>scene.remove(s));shards.length=0;fadeEl.style.background='#000';scEnd();
+}
+function afterHit(cause,say){
+  scSteps([
+    S_(.35,()=>{if(SC.A)tween(SC.A,'kick',0,.4)}),
+    S_(2.2,()=>say(cause==='kick'?'Ab hans ke dikha, bade dukaandaar!':'Dekha? Yeh hai mazaak ka anjaam!',2.4)),
+    S_(3.4,()=>{fade(1,1.3);cap('','')}),
+    S_(5.0,()=>{mockCleanup();injury(cause)})
+  ]);
+}
+
+// ---- MOCK: shared first half (insult, beer), then kick chase OR bottle throw ----
+function mockStart(){
+  if(SC.on||CINE.on||mode!=='walk'||paused)return;
+  const K=rival.keeper,A=mkActor(K,0,G,-.98,0);K.holdArms=true;A.lookCam=true;A.pose='idle';K.scripted=true;SCN.cd=120;
+  const cause=SCN.next;SCN.next=cause==='kick'?'bottle':'kick';SC.cause=cause;
+  scBegin('mock');SC.A=A;botHand();BOT.g.visible=false;
+  const say=(t,ttl)=>bubble(K.head,t,{ttl:ttl||2.8,off:.35,max:60});
+  const PL={x:clamp(cam.x,-3,3),z:3.4,on:true};
+  SC.L.act=(dt,t)=>A.step(dt,t);
+  SC.L.cam=dt=>{if(PL.on){const k=Math.min(1,dt*2.2);cam.x+=(PL.x-cam.x)*k;cam.z+=(PL.z-cam.z)*k;cam.y+=(1.62+G-cam.y)*k}camLook(A.x,1.5+A.y,A.z,Math.min(1,dt*3))};
+  SC.L.glug=dt=>{if(!A.drinking)return;A.glug=(A.glug||0)-dt;if(A.glug<=0){A.glug=.3;tone(180+Math.random()*60,.16,'sine',.09,0,.7);burst(.07,700,2,.08,'lowpass')}};
+  scSteps([
+    S_(.2,()=>{cap('You','“Sharma ji! Aaj meri dukaan ne tumse zyada kamaya!”');SFX.ding()}),
+    S_(2.8,()=>{cap('','');A.pose='greet';say('Kya?! Mazaak udata hai mera?!',2.6);SFX.no()}),
+    S_(5.6,()=>{A.pose='hold';say('Ruk, abhi batata hoon tujhe…',2.4);A.lookCam=false;A.goal={x:1.5,z:-1.38,sp:1.5}}),
+    S_(7.4,()=>{A.ryT=Math.PI;tween(A,'hy',0,.4)}),
+    S_(8.5,()=>{BOT.g.visible=true;burst(.05,3800,2,.3,'highpass');tone(300,.08,'square',.05);A.ryT=0;A.lookCam=true}),
+    S_(9.6,()=>{A.drinking=true;A.pose='drink';tween(A,'hx',-.45,.5);botHead();bubble(K.head,'glug… glug… glug…',{ttl:3,off:.55,float:true,max:60})}),
+    S_(13.2,()=>{A.drinking=false;A.pose='hold';tween(A,'hx',0,.4);botHand();say('Aaaah! Ab dekh mera gussa!',2.4)}),
+    S_(15.4,()=>{if(cause==='kick')mockKick(A,PL,say);else mockBottle(A,PL,say)})
+  ]);
+}
+// ending 1: jumps over the counter, chases you, kicks you
+function mockKick(A,PL,say){
+  PL.on=false;const px=clamp(cam.x,-.3,.3);
+  const land=()=>{tone(60,.25,'sine',.35,0,.5);burst(.18,260,1,.3,'lowpass');SC.shake=.7;A.pose='hold';A.ryT=0;startChase(A,say)};
+  scSteps([S_(0,()=>{say('Aaj tujhe nahi chhodunga!',2.2);A.pose='hold';A.lookCam=true;A.goal={x:px,z:-1.12,sp:2.4,done:()=>{A.ryT=0;A.pose='greet';burst(.25,500,1,.12,'bandpass');A.jump={u:0,dur:.75,h:1.25,x0:A.x,z0:A.z,x1:px,z1:1.05,done:land}}}})]);
+}
+function startChase(A,say){
+  const dir=cam.x>=0?1:-1,yt=-dir*Math.PI/2;let turn=.5;
+  SC.L.cam=dt=>{if(turn>0){turn-=dt;const k=Math.min(1,dt*9);cam.yaw+=angd(yt,cam.yaw)*k;cam.pitch+=(-.05-cam.pitch)*k;if(turn<=0){SCN.freeze=false;SCN.chase=true}}};
+  SCN.freeze=true;SCN.chase=false;A.lookCam=false;A.P.holdArms=false;SC.chaseT=0;SC.fs=0;
+  cap('RUN!','Move forward with W or the joystick. Sharma ji is right behind you!');
+  SC.L.chase=dt=>{
+    SC.chaseT+=dt;if(SCN.freeze)return;const sp=Math.min(5.8,2.0+SC.chaseT*.6),dx=cam.x-A.x,dz=cam.z-A.z,l=Math.hypot(dx,dz);
+    A.goal={x:cam.x,z:cam.z,sp};SC.fs-=dt;if(SC.fs<=0){SC.fs=.28;tone(65,.12,'sine',.2);burst(.05,300,1,.12,'lowpass')}
+    if(l<.95||SC.chaseT>14){
+      if(l>=.95){const fx=-Math.sin(cam.yaw),fz=-Math.cos(cam.yaw);A.x=cam.x-fx*.9;A.z=clamp(cam.z-fz*.9,-1.1,4.5)}
+      SCN.chase=false;SCN.freeze=true;SC.L.chase=null;kickHit(A,say)}
+  };
+}
+function kickHit(A,say){
+  A.goal=null;A.speed=0;A.pose='idle';A.ryT=Math.atan2(cam.x-A.x,cam.z-A.z);A.lookCam=true;cap('','');
+  SC.L.cam=dt=>camLook(A.x,1.35,A.z,Math.min(1,dt*3.5));
+  scSteps([
+    S_(0,()=>say('Le! Yeh mere mazaak ka jawab!',1.8)),
+    S_(.55,()=>tween(A,'kick',1,.22)),
+    S_(.78,()=>{hitEffects('Sharma ji kicked you hard. Everything spins…');afterHit('kick',say)})
+  ]);
+}
+// ending 2: throws the glass bottle at your head
+function mockBottle(A,PL,say){
+  PL.on=true;
+  scSteps([
+    S_(0,()=>{say('Aaj tujhe sabak sikhata hoon!',2.2);A.pose='windup';A.lookCam=true}),
+    S_(1.3,()=>say('Le! Yeh kaanch ki bottle teri khopdi pe!',1.5)),
+    S_(1.9,()=>{A.pose='throw'}),
+    S_(2.02,()=>{
+      const from=new THREE.Vector3();BOT.g.getWorldPosition(from);scene.attach(BOT.g);BOT.g.position.copy(from);BOT.g.visible=true;
+      const to=new THREE.Vector3(cam.x,cam.y-.08,cam.z);let u=0;burst(.35,900,1.5,.18,'bandpass');
+      SC.L.fly=dt=>{u=Math.min(1,u+dt/.5);BOT.g.position.lerpVectors(from,to,u);BOT.g.position.y+=Math.sin(Math.PI*u)*.18;BOT.g.rotation.x+=dt*18;BOT.g.rotation.z+=dt*7;
+        if(u>=1){SC.L.fly=null;BOT.g.visible=false;shatter();hitEffects('A glass bottle smashed against your head.');afterHit('bottle',say)}}
+    })
+  ]);
+}
+mockBtn.onclick=()=>{if(!paused)mockStart()};
+function mockCheck(dt){
+  SCN.cd=Math.max(0,SCN.cd-dt);SCN.chk-=dt;if(SCN.chk>0)return;SCN.chk=.3;
+  const ahead=ST.built&&ST.today.me>ST.today.rival&&ST.today.me>=100;
+  const ok=!SC.on&&!CINE.on&&mode==='walk'&&!paused&&ahead&&Math.abs(cam.x)<9&&SCN.cd<=0;
+  mockBtn.hidden=!ok;
+  if(ahead&&SCN.hintDay!==ST.day&&mode==='walk'&&!paused&&!SC.on&&!CINE.on){SCN.hintDay=ST.day;toast('You are earning more than Sharma ji today! Stand near his stall and you can mock him.')}
+}
+
+// ---- hospital after an injury: free treatment ----
+const INJ={
+  kick:{nurse1:'Easy, sir. Your ribs and leg took a hard kick. You are in City Hospital.',erdoc:'He was kicked hard. Take him to the ICU for a full scan.',
+    docs:['Dr. Rao: The head scan is clear. No bleeding.','Dr. Iyer: Two cracked ribs and a badly bruised leg. We will strap them.','Dr. Khan: Heart rate is steady. Oxygen is ninety-eight percent.','Dr. Nair: Blood pressure is back to normal. The pain will fade in a few days.','Dr. Mehta: He is strong. The danger has passed. And no bill, the hospital insists.'],
+    visit:'Bhaiya, the police warned Sharma ji. He is very sorry and sent laddoos!',safe:'You are safe now. Rest, eat well, and be kind to your neighbours.'},
+  bottle:{nurse1:'Do not touch the bandage, sir. You are in City Hospital.',erdoc:'Glass injury to the head. Take him to the ICU for a scan.',
+    docs:['Dr. Rao: The scan shows no bleeding inside, only a mild concussion.','Dr. Iyer: A deep cut on the forehead. Eight stitches, all done.','Dr. Khan: Every piece of glass is out of the wound.','Dr. Nair: Blood pressure is back to normal. The dizziness will pass.','Dr. Mehta: He is safe now. And no bill, the hospital insists.'],
+    visit:'Bhaiya, the police took Sharma ji’s bottles away. He is very sorry and sent laddoos!',safe:'You are safe now. Rest, eat well, and be kind to your neighbours.'}
+};
+function finishInjury(){
+  CINE.on=false;CINE.tick=null;sceneSet(false);document.body.classList.remove('cine');$('#bSkip').hidden=true;cap();
+  mode='walk';paused=false;cam.x=0;cam.z=3.3;cam.y=1.62+G;cam.yaw=0;cam.pitch=-.03;cam.fov=62;$('#bExit').hidden=true;$('#bEnter').hidden=true;
+  fade(0,.9);toast('Discharged. The hospital treated you free of charge.');SFX.ding();SCN.cd=120;refreshHud();
+}
+function injury(cause){
+  if(CINE.on)return;
+  CINE.on=true;CINE.t=0;CINE.i=0;CINE.flags={};CINE.wait=false;CINE.pid=0;CINE.vid=null;CINE.tick=null;CINE.amb=null;buildHospital();
+  document.body.classList.add('cine');paused=true;mode='cine';$('#bExit').hidden=true;$('#bEnter').hidden=true;$('#bSkip').hidden=false;
+  const I=INJ[cause]||INJ.kick,P=()=>HV.P;let sirenT=0,beat=0;
+  cap('Ambulance',cause==='kick'?'Passers-by rush you into an ambulance…':'Passers-by wrap your head and call an ambulance…');
+  CINE.tick=dt=>{sirenT-=dt;if(sirenT<=0){sirenT=.45;beat^=1;tone(beat?960:700,.4,'sine',.06)}};
+  CINE.steps=[S_(3.6,()=>cap('',''))].concat(hospSteps(S_,P,{free:true,nurse1:I.nurse1,erdoc:I.erdoc,docs:I.docs,visit:I.visit,safe:I.safe,
+    discharge:'Doctor says you can go home. There is no bill today, the hospital pays everything.',last:'Your stalls are waiting, bhaiya. Go gently!',finish:finishInjury}));
+  CINE.billAt=69;
+}
+
+// ---- BEGGAR at the bank ----
+const BEG={x:DEST.bank.x+4.6,z:1.45};
+const BG=(function(){
+  const P=makePerson({skin:SKIN[4],top:0x8a7a5a,bottom:0x6b5f4a,hair:0xc9c9c9,mustache:1,longSleeve:1,scale:.94});
+  box(.15,.1,.05,M(0xc9c9c9),0,-.09,.085,P.head,false);box(.2,.05,.2,M(0xb8b0a0),0,.12,0,P.head,false);
+  const smile=new THREE.Mesh(new THREE.TorusGeometry(.028,.006,5,10,Math.PI),M(0x2b1208));smile.position.set(0,-.045,.121);smile.rotation.z=Math.PI;smile.visible=false;P.head.add(smile);
+  box(1.1,.02,.9,M(0x9b6a4a),BEG.x,G+.012,BEG.z+.3,scene,false);
+  const bowl=cyl(.14,.09,.07,M(0xb08d57,{metalness:.5,roughness:.4}),BEG.x,G+.05,BEG.z+1.0,scene,12);
+  for(let i=0;i<3;i++)cyl(.02,.02,.006,M(0xd7dbe0),BEG.x-.04+i*.04,G+.086,BEG.z+1.0+(i%2)*.03,scene,8);
+  P.g.position.set(BEG.x,G,BEG.z);P.holdArms=true;scene.add(P.g);P.g.userData.pick={kind:'beggar'};bowl.userData.pick={kind:'beggar'};
+  const a=mkActor(P,BEG.x,G,BEG.z,0);a.sit=1;a.pose='beg';a.hx=.28;
+  return {P,a,smile,bowl};
+})();
+EXT.roots=(prev=>()=>{const a=prev();a.push(BG.P.g,BG.bowl);return a})(EXT.roots);
+EXT.hover=(prev=>p=>{if(p&&p.kind==='beggar')return 'Beggar · click to give money';return prev(p)})(EXT.hover);
+EXT.click=(prev=>p=>{if(p.kind==='beggar'){askBeggar();return true}return prev(p)})(EXT.click);
+function askBeggar(){
+  if(paused||SC.on||CINE.on||mode!=='walk')return;
+  if(Math.abs(cam.x-BEG.x)>7){toast('Walk closer to him first.');return}
+  if(SCN.begCd>0){toast('He is still smiling from your last kindness. Come back later.');return}
+  openModal();const el=$('#modalBody'),amts=[10,20,50,100];
+  el.innerHTML=`<h2>Give money?</h2><div class="muted">An old man sits on the bank steps with an almost empty bowl.</div><div class="row"><span class="grow">Your cash</span><b class="amt">${fmt(ST.cash)}</b></div>
+  <div class="row" style="flex-wrap:wrap">${amts.map(a=>`<button class="btn" data-g="${a}" ${ST.cash<a?'disabled':''}>${fmt(a)}</button>`).join('')}</div><div class="row"><button class="btn ghost" id="bgx">Not now</button></div>`;
+  el.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{const a=+b.dataset.g;if(ST.cash<a)return;ST.cash-=a;refreshHud();closeModal();SFX.coin();beggarScene(a)});
+  $('#bgx').onclick=closeModal;
+}
+function beggarScene(amount){
+  if(SC.on||CINE.on)return;
+  const a=BG.a,P=BG.P;scBegin('beggar');SC.A=a;SCN.begCd=40;a.pose='beg';a.sit=1;a.lookCam=true;a.x=BEG.x;a.z=BEG.z;a.ryT=0;
+  const say=(t,ttl)=>bubble(P.head,t,{ttl:ttl||2.8,off:.3,max:30});
+  const cx=BEG.x+.15,cz=3.15,cy=1.62+G,PL={on:true};let hop=false;
+  SC.L.act=(dt,t)=>{if(hop)a.y=Math.abs(Math.sin(t*7))*.13;a.step(dt,t)};
+  SC.L.cam=dt=>{if(PL.on){const k=Math.min(1,dt*2.6);cam.x+=(cx-cam.x)*k;cam.z+=(cz-cam.z)*k;cam.y+=(cy-cam.y)*k}camLook(a.x,1.5-.5*a.sit,a.z,Math.min(1,dt*3))};
+  scSteps([
+    S_(.2,()=>{cap('You','You drop '+fmt(amount)+' into his bowl.');SFX.coin()}),
+    S_(1.0,()=>{BG.smile.visible=true;tween(a,'sit',0,1.0);tween(a,'hx',0,.8);a.pose='pray';say('Arre! Itna?! Bhagwan tumhe sukhi rakhe, beta!',3)}),
+    S_(3.8,()=>{cap('','');a.pose='cheer';hop=true;say('Aaj bhooka nahi sona padega!',2.6)}),
+    S_(6.0,()=>{hop=false;a.y=0;a.pose='wide';say('Aao, gale lag jao, beta!',2.4);a.goal={x:cam.x,z:cam.z-1.2,sp:1.3}}),
+    S_(8.0,()=>{a.goal={x:cam.x,z:cam.z-.52,sp:.7}}),
+    S_(9.6,()=>{PL.on=false;a.pose='hug';a.ryT=Math.atan2(cam.x-a.x,cam.z-a.z);cap('','He hugs you tight.');tween(cam,'fov',53,1.2);tint('#ff9a5a',.2,900);hearts(5);tone(95,.12,'sine',.25);tone(95,.12,'sine',.25,.35);burst(.1,260,1,.12,'lowpass',.35)}),
+    S_(12.2,()=>{tween(a,'hz',.32,.5);tween(a,'hx',.18,.5);a.goal={x:cam.x+.1,z:cam.z-.44,sp:.4}}),
+    S_(12.9,()=>{cap('','He kisses your cheek and blesses you.');bubble(P.head,'💋 Mwah!',{ttl:2,off:.45,float:true,max:30});tone(1250,.05,'sine',.16,0,.7);tone(760,.07,'sine',.14,.06,1.3);burst(.05,2200,2,.12,'highpass',.02);tint('#ff7aa8',.32,350);hearts(8)}),
+    S_(14.6,()=>{tween(a,'hz',0,.5);tween(a,'hx',0,.5);a.pose='pray';tween(cam,'fov',SC.fov,.9);say('Jug jug jiyo, beta! Tumhari dukaan khoob chalegi!',3.2);a.goal={x:BEG.x,z:cam.z-1.4,sp:.8}}),
+    S_(17.2,()=>{cap('','');a.goal={x:BEG.x,z:BEG.z,sp:1.0,done:()=>{a.ryT=0}}}),
+    S_(19.2,()=>{tween(a,'sit',1,1.0);a.pose='beg';tween(a,'hx',.28,1)}),
+    S_(20.6,()=>{BG.smile.visible=false;a.lookCam=false;a.hy=0;a.hz=0;a.x=BEG.x;a.z=BEG.z;a.ryT=0;a.ry=0;a.y=0;a.sit=1;scEnd();ST.rep=clamp(ST.rep+.15,0,5);refreshHud();toast('His blessing brings good karma: shop rating +0.15.')})
+  ]);
+}
+function begUpdate(sd,t,dt){
+  const a=BG.a,px=mode==='drive'&&DR.veh?DR.veh.g.position.x:cam.x,near=Math.abs(px-BEG.x);
+  SCN.begCd=Math.max(0,SCN.begCd-sd);
+  if(!(SC.on&&SC.kind==='beggar')&&near<70){a.hy=Math.sin(t*.4)*.25;a.step(dt,t)}
+  if(sd>0&&mode==='walk'&&near<8&&!SC.on&&!CINE.on){SCN.begBub-=sd;if(SCN.begBub<=0){SCN.begBub=rnd(12,20);bubble(BG.P.head,'Babuji, kuch de do… Bhagwan bhala karega',{ttl:4,off:.35,max:14,act:true,onClick:askBeggar})}}
+  if(near<16){if(!SCN.begHint){SCN.begHint=true;toast('A beggar sits by the bank steps. Get out, walk up and click him to give money.')}}else if(near>40)SCN.begHint=false;
+}
+function scUpdate(sd,t,dt){
+  if(!started)return;
+  tweenStep(dt);shardsStep(dt);
+  if(SC.on){SC.t+=dt;while(SC.i<SC.steps.length&&SC.steps[SC.i].at<=SC.t){SC.steps[SC.i++].run()}
+    for(const k in SC.L){const f=SC.L[k];if(f)f(dt,t)}
+    if(SC.shake>0){SC.shake=Math.max(0,SC.shake-dt*1.4);const s=SC.shake*.1;cam.yaw+=(Math.random()-.5)*s*.5;cam.pitch+=(Math.random()-.5)*s*.4}}
+  begUpdate(sd,t,dt);mockCheck(dt);
+}
+EXT.update=(prev=>(sd,t,dt)=>{prev(sd,t,dt);scUpdate(sd,t,dt)})(EXT.update);
+
 // ---------- main loop ----------
 let last=performance.now(),clk=0,birdT=3,autoSave=0,skyT=0;
 const DAYSEC=420;
@@ -1715,7 +1982,7 @@ function frame(now){
   sky.position.copy(camera.position);stars.position.copy(camera.position);
   rival.update(t,dt);if(me)me.update(t,dt);
   // keepers look at the player
-  [rival,me].forEach(S=>{if(!S)return;const P=S.keeper;if(!P.g.visible)return;
+  [rival,me].forEach(S=>{if(!S)return;const P=S.keeper;if(!P.g.visible||P.scripted)return;
     const wp=S.cx,dx=camera.position.x-wp,dz=camera.position.z+.98;let a=Math.atan2(dx,dz);a=clamp(a,-.9,.9);P.head.rotation.y+=(a-P.head.rotation.y)*Math.min(1,dt*3);
     updatePerson(P,dt,t,0);if(S.helper&&S.helper.g.visible){updatePerson(S.helper,dt,t,0);S.helper.head.rotation.y=Math.sin(t*.5)*.4}});
   if(me&&mode==='owner'){me.keeper.g.visible=false}
@@ -1738,6 +2005,7 @@ $('#bHelp').onclick=()=>{if(paused)return;openModal();$('#modalBody').innerHTML=
  <div>Click a jar to lift its lid, pick a quantity, then add it to your bill. Hanging packets and cabinet items work the same way.</div>
  <div>Pay with notes and coins. Big notes for small bills get refused. Try Bargain once per bill.</div>
  <div>Click the TO LET board to rent the plot next door. Stock jars, set prices, add lights, music and a signboard.</div>
+ <div>Earn more than Sharma ji in a day and a "Mock Sharma ji" button appears near his stall. He will not take it well. At the bank, click the beggar to give him money.</div>
  <div>Customers walk by all day. Click a waiting customer to serve them, or hire a helper. "Aao aao!" calls nearby people over.</div>
  <div class="row"><button class="btn ghost" id="hx">Close</button></div>`;$('#hx').onclick=closeModal};
 $('#bCounter').onclick=()=>{
@@ -1755,7 +2023,7 @@ function begin(cont){
 $('#bGo').onclick=()=>begin(false);
 {const s=peek();if(s&&typeof s.cash==='number'){$('#bCont').hidden=false;$('#bCont').textContent=`Continue · Day ${s.day} · ${fmt(s.cash)}`;$('#bCont').onclick=()=>begin(true)}}
 resize();makeEnv();applyTime(hourOf());
-window.__kirana={crash,CINE,ST,XS,BR,DR,openRent,openBranch,openPhone,openBank,openRestaurant,startDrive,exitDrive,PARK,tfolk,bcusts,rival,openBuild,openShop,spawnCust,get me(){return me},cam,custs,openItem,serve,shout,begin};
+window.__kirana={crash,CINE,ST,XS,BR,DR,openRent,openBranch,openPhone,openBank,openRestaurant,startDrive,exitDrive,PARK,tfolk,bcusts,rival,openBuild,openShop,spawnCust,get me(){return me},cam,custs,openItem,serve,shout,begin,SC,SCN,mockStart,beggarScene,askBeggar,injury,BG,BOT};
 requestAnimationFrame(frame);
 })();
 </script>
